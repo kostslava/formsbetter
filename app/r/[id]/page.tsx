@@ -1,123 +1,216 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { FileText, ArrowLeft, Save } from "lucide-react";
+import { useParams, useSearchParams } from "next/navigation";
+import { ArrowLeft, Download, LoaderCircle } from "lucide-react";
+import { getOrCreateCreatorToken, setCreatorToken } from "@/lib/creator-token";
+import { THEMES } from "@/lib/theme";
+import { FormRecord, FormResponseRecord } from "@/lib/types";
 
-export default function ResultsView() {
-  const params = useParams();
-  const id = params.id as string;
-  
-  const [form, setForm] = useState<any>(null);
-  const [responses, setResponses] = useState<any[]>([]);
+interface ResultsPayload {
+  form: FormRecord;
+  responses: FormResponseRecord[];
+}
+
+function csvEscape(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+export default function ResultsPage() {
+  const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const formId = params.id;
+  const keyFromQuery = searchParams.get("key");
+
+  const [payload, setPayload] = useState<ResultsPayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchData = async () => {
-      const { data: formData, error: formError } = await supabase
-        .from("forms")
-        .select("*")
-        .eq("id", id)
-        .single();
-      
-      if (formData) {
-        setForm(formData);
-        
-        const { data: responsesData } = await supabase
-          .from("responses")
-          .select("*")
-          .eq("form_id", id)
-          .order("created_at", { ascending: false });
-          
-        if (responsesData) {
-          setResponses(responsesData);
-        }
-      } else {
-        console.error("Error fetching form:", formError);
-      }
-      setLoading(false);
-    };
+    if (keyFromQuery) {
+      setCreatorToken(keyFromQuery);
+    }
 
-    fetchData();
-  }, [id]);
+    async function loadResults() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const creatorToken = keyFromQuery || getOrCreateCreatorToken();
+        const response = await fetch(`/api/forms/${formId}/responses`, {
+          headers: {
+            "x-creator-token": creatorToken,
+          },
+        });
+
+        const data = (await response.json()) as
+          | (ResultsPayload & { error?: string })
+          | { error: string };
+
+        if (!response.ok || !("form" in data)) {
+          throw new Error(data.error || "Could not load responses");
+        }
+
+        setPayload({
+          form: data.form,
+          responses: data.responses,
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not load responses");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void loadResults();
+  }, [formId, keyFromQuery]);
+
+  const theme = useMemo(() => {
+    if (!payload) {
+      return THEMES.orchid;
+    }
+    return THEMES[payload.form.theme_id] ?? THEMES.orchid;
+  }, [payload]);
+
+  const exportCsv = () => {
+    if (!payload) {
+      return;
+    }
+
+    const header = [
+      csvEscape("Submitted At"),
+      ...payload.form.fields
+        .filter((field) => field.type !== "image")
+        .map((field) => csvEscape(field.label)),
+    ].join(",");
+
+    const rows = payload.responses.map((response) => {
+      const values = [
+        csvEscape(new Date(response.created_at).toISOString()),
+        ...payload.form.fields
+          .filter((field) => field.type !== "image")
+          .map((field) => csvEscape(response.answers[field.id] || "")),
+      ];
+
+      return values.join(",");
+    });
+
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${payload.form.title}-responses.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   if (loading) {
-    return <main className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-purple-600 font-medium">Loading results...</p></main>;
+    return (
+      <main className="flex min-h-screen items-center justify-center">
+        <p className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm">
+          <LoaderCircle size={16} className="animate-spin" />
+          Loading responses...
+        </p>
+      </main>
+    );
   }
 
-  if (!form) {
-    return <main className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-gray-500 font-medium">Form not found.</p></main>;
+  if (error || !payload) {
+    return (
+      <main className="flex min-h-screen items-center justify-center px-4">
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700">
+          {error || "Unable to open results"}
+        </div>
+      </main>
+    );
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 py-10 px-4">
-      <div className="max-w-5xl mx-auto space-y-8">
-        <header className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="text-gray-400 hover:text-gray-900 transition-colors p-2 bg-white rounded-full border border-gray-200">
-              <ArrowLeft size={20} />
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 leading-tight">{form.title}</h1>
-              <div className="text-sm font-medium text-gray-500 pt-1 flex gap-2">
-                <span>{responses.length} responses</span>
-                <span>•</span>
-                <a href={`/f/${form.short_url}`} target="_blank" className="text-purple-600 hover:underline">View Live Form</a>
-              </div>
+    <main className="min-h-screen px-4 py-10 sm:px-6">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+        <section className="rounded-2xl border border-white/60 bg-white p-5 shadow-sm sm:p-7">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="space-y-2">
+              <Link
+                href="/"
+                className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition hover:text-slate-900"
+              >
+                <ArrowLeft size={14} />
+                Dashboard
+              </Link>
+              <h1 className="text-3xl font-semibold text-slate-900">{payload.form.title}</h1>
+              <p className="text-sm text-slate-600">
+                {payload.responses.length} response{payload.responses.length === 1 ? "" : "s"}
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <a
+                href={`/f/${payload.form.short_code}`}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Open live form
+              </a>
+              <button
+                type="button"
+                onClick={exportCsv}
+                className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+              >
+                <Download size={15} />
+                Export CSV
+              </button>
             </div>
           </div>
-          <button onClick={() => {
-            const csvContent = [
-              // Header
-              ["Date", ...form.fields.map((f: any) => `"${f.label.replace(/"/g, '""')}"`)].join(","),
-              // Rows
-              ...responses.map(r => [
-                new Date(r.created_at).toLocaleString(),
-                ...form.fields.map((f: any) => `"${((r.answers || {})[f.id] || "").replace(/"/g, '""')}"`)
-              ].join(","))
-            ].join("\n");
-            
-            const blob = new Blob([csvContent], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${form.title}-results.csv`;
-            a.click();
-          }} className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium rounded-lg transition-colors border border-gray-200">
-            <Save size={18} />
-            Export CSV
-          </button>
-        </header>
 
-        {responses.length === 0 ? (
-          <div className="text-center bg-white rounded-xl border border-dashed border-gray-300 p-16 shadow-sm">
-             <div className="bg-purple-50 text-purple-600 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                 <FileText size={28} />
-             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Waiting for responses</h3>
-            <p className="text-gray-500 mb-6 text-lg max-w-md mx-auto">Share your form link <span className="font-semibold text-gray-700">({form.short_url})</span> to start collecting input from others.</p>
-          </div>
+          <div className="mt-4 h-1.5 rounded-full" style={{ backgroundColor: theme.accent }} />
+        </section>
+
+        {payload.responses.length === 0 ? (
+          <section className="rounded-2xl border border-dashed border-slate-300 bg-white px-8 py-14 text-center text-sm text-slate-600">
+            No responses yet. Share the form URL to start collecting answers.
+          </section>
         ) : (
-          <div className="space-y-6">
-             {responses.map((resp, i) => (
-                <div key={resp.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                  <div className="text-xs font-semibold text-gray-400 mb-4 border-b border-gray-100 pb-3 flex justify-between">
-                     <span>Response #{responses.length - i}</span>
-                     <span>{new Date(resp.created_at).toLocaleString()}</span>
-                  </div>
-                  <dl className="space-y-4">
-                    {form.fields.map((field: any) => (
-                      <div key={field.id} className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-start pb-4 border-b border-gray-50 last:border-0 last:pb-0">
-                         <dt className="text-sm font-semibold text-gray-700 w-full truncate">{field.label || 'Untitled Question'}</dt>
-                         <dd className="text-base font-medium text-gray-900 col-span-2">{resp.answers[field.id] || <span className="text-gray-300 italic">No answer</span>}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </div>
-             ))}
-          </div>
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px]">
+                <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Submitted</th>
+                    {payload.form.fields
+                      .filter((field) => field.type !== "image")
+                      .map((field) => (
+                        <th key={field.id} className="px-4 py-3 font-semibold">
+                          {field.label}
+                        </th>
+                      ))}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {payload.responses.map((response) => (
+                    <tr key={response.id} className="border-t border-slate-100 text-sm text-slate-700">
+                      <td className="px-4 py-3 align-top text-xs text-slate-500">
+                        {new Date(response.created_at).toLocaleString()}
+                      </td>
+                      {payload.form.fields
+                        .filter((field) => field.type !== "image")
+                        .map((field) => (
+                          <td key={field.id} className="px-4 py-3 align-top">
+                            {response.answers[field.id] || (
+                              <span className="text-slate-300">No answer</span>
+                            )}
+                          </td>
+                        ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
         )}
       </div>
     </main>

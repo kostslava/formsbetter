@@ -1,36 +1,91 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FormsBetter
 
-## Getting Started
+FormsBetter is a Google Forms look-alike app built with Next.js + Supabase.
 
-First, run the development server:
+It includes:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Visual form builder
+- Theme selection
+- Question types: short text, paragraph, image block
+- Image upload to Supabase Storage
+- Short share URLs
+- QR code for each published form
+- Public response page
+- Creator-only response dashboard
+- CSV export
+
+## Tech Stack
+
+- Next.js 16 App Router
+- Tailwind CSS
+- Supabase (Postgres + Storage)
+
+## 1) Supabase Setup
+
+Create a new Supabase project, then run this SQL in the SQL Editor:
+
+```sql
+create extension if not exists pgcrypto;
+
+create table if not exists forms (
+	id uuid primary key default gen_random_uuid(),
+	creator_token text not null,
+	title text not null,
+	description text not null default '',
+	short_code text not null unique,
+	theme_id text not null default 'orchid',
+	fields jsonb not null,
+	created_at timestamptz not null default now()
+);
+
+create index if not exists forms_creator_token_idx on forms(creator_token);
+
+create table if not exists responses (
+	id uuid primary key default gen_random_uuid(),
+	form_id uuid not null references forms(id) on delete cascade,
+	answers jsonb not null,
+	created_at timestamptz not null default now()
+);
+
+create index if not exists responses_form_id_idx on responses(form_id);
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Create a Storage bucket in Supabase Storage:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Bucket name: `form-images`
+- Public bucket: `ON`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 2) Environment Variables
 
-## Learn More
+Copy `.env.example` to `.env.local` and fill values:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+cp .env.example .env.local
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Required variables:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_FORMS_BUCKET` (default `form-images`)
 
-## Deploy on Vercel
+## 3) Local Run
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm install
+npm run dev
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Open `http://localhost:3000`.
+
+## 4) Deploy to Vercel
+
+1. Push this repo to GitHub.
+2. Import it in Vercel.
+3. In Vercel project settings, add all env vars from `.env.local`.
+4. Deploy.
+
+## Notes on Creator Access
+
+This app uses a local creator token in browser storage (no login flow required). The token is used by API routes to scope dashboard and response access to the form creator.

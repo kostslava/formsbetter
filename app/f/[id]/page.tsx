@@ -1,129 +1,219 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { useParams } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { CheckCircle2, LoaderCircle } from "lucide-react";
+import { THEMES } from "@/lib/theme";
+import { FormField, FormRecord } from "@/lib/types";
 
-export default function FormView() {
-  const params = useParams();
-  const id = params.id as string;
-  
-  const [form, setForm] = useState<any>(null);
+export default function FormViewPage() {
+  const params = useParams<{ id: string }>();
+  const shortCode = params.id;
+
+  const [form, setForm] = useState<FormRecord | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchForm = async () => {
-      const { data, error } = await supabase
-        .from("forms")
-        .select("*")
-        .eq("short_url", id)
-        .single();
-      
-      if (data) {
-        setForm(data);
-      } else {
-        console.error("Error fetching form:", error);
+    async function loadForm() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch(`/api/forms/public/${shortCode}`);
+        const data = (await response.json()) as { form?: FormRecord; error?: string };
+
+        if (!response.ok || !data.form) {
+          throw new Error(data.error || "Form not found");
+        }
+
+        setForm(data.form);
+
+        const initialAnswers: Record<string, string> = {};
+        data.form.fields.forEach((field) => {
+          if (field.type !== "image") {
+            initialAnswers[field.id] = "";
+          }
+        });
+        setAnswers(initialAnswers);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not load form");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    };
+    }
 
-    fetchForm();
-  }, [id]);
+    void loadForm();
+  }, [shortCode]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const theme = useMemo(() => {
+    if (!form) {
+      return THEMES.orchid;
+    }
+    return THEMES[form.theme_id] ?? THEMES.orchid;
+  }, [form]);
+
+  const handleChange = (field: FormField, value: string) => {
+    setAnswers((prev) => ({
+      ...prev,
+      [field.id]: value,
+    }));
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!form) {
+      return;
+    }
+
     setSubmitting(true);
-    
-    try {
-      const { error } = await supabase
-        .from("responses")
-        .insert([
-          { form_id: form.id, answers }
-        ]);
+    setError(null);
 
-      if (error) throw error;
+    try {
+      const response = await fetch("/api/responses", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          formId: form.id,
+          answers,
+        }),
+      });
+
+      const data = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "Failed to submit response");
+      }
+
       setSubmitted(true);
-    } catch (e) {
-      console.error(e);
-      alert("Failed to submit form.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to submit response");
     } finally {
       setSubmitting(false);
     }
   };
 
   if (loading) {
-    return <main className="min-h-screen bg-purple-50 flex items-center justify-center"><p className="text-purple-600 font-medium">Loading form...</p></main>;
-  }
-
-  if (!form) {
-    return <main className="min-h-screen bg-purple-50 flex items-center justify-center"><p className="text-gray-500 font-medium">Form not found.</p></main>;
-  }
-
-  if (submitted) {
     return (
-      <main className="min-h-screen bg-purple-50 py-10 px-4 flex items-center justify-center">
-        <div className="max-w-2xl w-full bg-white rounded-xl shadow-lg border-t-8 border-t-purple-600 p-10 text-center">
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">{form.title}</h1>
-          <p className="text-gray-600 text-lg">Your response has been recorded.</p>
+      <main className="flex min-h-screen items-center justify-center">
+        <p className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm">
+          <LoaderCircle size={16} className="animate-spin" />
+          Loading form...
+        </p>
+      </main>
+    );
+  }
+
+  if (error || !form) {
+    return (
+      <main className="flex min-h-screen items-center justify-center px-4">
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700">
+          {error || "Form not found"}
         </div>
       </main>
     );
   }
 
-  return (
-    <main className="min-h-screen bg-purple-50 py-10 px-4">
-      <form onSubmit={handleSubmit} className="max-w-3xl mx-auto space-y-6">
-        <div className="bg-white rounded-xl shadow-md border-t-8 border-t-purple-600 p-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            {form.title}
-          </h1>
-          {form.description && (
-            <p className="text-gray-600 text-lg leading-relaxed border-t border-gray-100 pt-4">
-              {form.description}
-            </p>
-          )}
-        </div>
+  if (submitted) {
+    return (
+      <main className="flex min-h-screen items-center justify-center px-4">
+        <section className="w-full max-w-xl rounded-2xl border border-emerald-200 bg-white p-8 text-center shadow-sm">
+          <CheckCircle2 className="mx-auto mb-3 text-emerald-500" size={30} />
+          <h1 className="text-2xl font-semibold text-slate-900">Response recorded</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            Thank you. Your response to {form.title} has been saved.
+          </p>
+        </section>
+      </main>
+    );
+  }
 
-        {form.fields?.map((el: any, index: number) => (
-          <div key={el.id} className="bg-white rounded-xl shadow-sm p-8 flex flex-col gap-4 border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-900">
-              {el.label || `Question ${index + 1}`}
-              <span className="text-red-500 ml-1">*</span>
-            </h3>
-            
-            {el.type === "text" && (
-              <input
-                type="text"
-                required
-                className="w-full text-black outline-none border-b-2 border-gray-200 focus:border-purple-600 pb-2 transition-colors focus:bg-purple-50/50 px-2 pt-2 rounded-t-md"
-                placeholder="Your answer"
-                value={answers[el.id] || ""}
-                onChange={(e) => setAnswers({ ...answers, [el.id]: e.target.value })}
-              />
-            )}
-            {el.type === "image" && (
-              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-gray-500 text-sm">
-                [Image block] - {el.value || "Placeholder graphic"}
-              </div>
+  return (
+    <main className="min-h-screen px-4 py-10 sm:px-6">
+      <form onSubmit={handleSubmit} className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+        <section className="overflow-hidden rounded-3xl border border-white/50 bg-white shadow-sm">
+          <div className="p-7 sm:p-9" style={{ backgroundColor: theme.softBg }}>
+            <h1 className="text-3xl font-semibold text-slate-900 sm:text-4xl">{form.title}</h1>
+            {form.description && (
+              <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700 sm:text-base">
+                {form.description}
+              </p>
             )}
           </div>
+          <div className="h-1.5" style={{ backgroundColor: theme.accent }} />
+        </section>
+
+        {form.fields.map((field, index) => (
+          <section key={field.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
+              Item {index + 1}
+            </div>
+
+            {field.type === "image" ? (
+              <figure className="space-y-3">
+                {field.imageUrl ? (
+                  <Image
+                    src={field.imageUrl}
+                    alt={field.label}
+                    width={1280}
+                    height={720}
+                    className="max-h-[420px] w-full rounded-xl border border-slate-200 object-cover"
+                  />
+                ) : (
+                  <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
+                    Image unavailable
+                  </div>
+                )}
+                <figcaption className="text-sm font-medium text-slate-700">{field.label}</figcaption>
+              </figure>
+            ) : (
+              <>
+                <label className="mb-2 block text-base font-semibold text-slate-900">
+                  {field.label}
+                  {field.required && <span className="ml-1 text-rose-600">*</span>}
+                </label>
+                {field.type === "paragraph" ? (
+                  <textarea
+                    rows={4}
+                    value={answers[field.id] || ""}
+                    onChange={(event) => handleChange(field, event.target.value)}
+                    required={field.required}
+                    placeholder={field.placeholder || "Type your answer"}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                  />
+                ) : (
+                  <input
+                    value={answers[field.id] || ""}
+                    onChange={(event) => handleChange(field, event.target.value)}
+                    required={field.required}
+                    placeholder={field.placeholder || "Short answer"}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                  />
+                )}
+              </>
+            )}
+          </section>
         ))}
 
-        <div className="pt-4 flex justify-between items-center">
-          <button
-            type="submit"
-            disabled={submitting}
-            className="px-8 py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-md transition-colors"
-          >
-            {submitting ? "Submitting..." : "Submit"}
-          </button>
-          <div className="text-sm font-medium text-gray-400">
-            FormsBetter
+        {error && (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {error}
           </div>
-        </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={submitting}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {submitting ? <LoaderCircle size={16} className="animate-spin" /> : null}
+          {submitting ? "Submitting..." : "Submit response"}
+        </button>
       </form>
     </main>
   );
