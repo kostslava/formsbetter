@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import { createSupabaseServiceClient } from "@/lib/supabase";
-import { jsonError, requireCreatorToken } from "@/lib/server-api";
+import { jsonError, requireFirebaseUserId } from "@/lib/server-api";
 
 function extensionFromName(fileName: string): string {
   const parts = fileName.split(".");
@@ -11,9 +11,9 @@ function extensionFromName(fileName: string): string {
 }
 
 export async function POST(request: Request) {
-  const creatorToken = requireCreatorToken(request);
-  if (!creatorToken) {
-    return jsonError("Missing creator token", 401);
+  const creatorUid = await requireFirebaseUserId(request);
+  if (!creatorUid) {
+    return jsonError("Unauthorized", 401);
   }
 
   const formData = await request.formData();
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     const bucketName = process.env.SUPABASE_FORMS_BUCKET || "form-images";
 
     const ext = extensionFromName(value.name);
-    const key = `${creatorToken}/${Date.now()}-${nanoid(8)}.${ext}`;
+    const key = `${creatorUid}/${Date.now()}-${nanoid(8)}.${ext}`;
     const bytes = await value.arrayBuffer();
 
     const { error } = await supabase.storage.from(bucketName).upload(key, bytes, {

@@ -21,7 +21,7 @@ export const THEMES: Record<
     canvasClass:
       "bg-[radial-gradient(circle_at_15%_15%,rgba(167,139,250,0.22),transparent_26%),radial-gradient(circle_at_86%_12%,rgba(45,212,191,0.16),transparent_24%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)]",
     heroClass:
-      "bg-[radial-gradient(circle_at_top_left,#ddd6fe_0%,#f5f3ff_35%,#fafaf9_100%)]",
+      "bg-[radial-gradient(circle_at_top_left,#4338ca_0%,#6d28d9_36%,#7c3aed_100%)]",
     borderClass: "border-violet-300",
     ringClass: "focus:ring-violet-400/45",
   },
@@ -33,7 +33,7 @@ export const THEMES: Record<
     canvasClass:
       "bg-[radial-gradient(circle_at_10%_12%,rgba(45,212,191,0.2),transparent_26%),radial-gradient(circle_at_85%_8%,rgba(14,165,233,0.2),transparent_24%),linear-gradient(180deg,#ecfeff_0%,#f8fafc_100%)]",
     heroClass:
-      "bg-[radial-gradient(circle_at_top_left,#99f6e4_0%,#ccfbf1_35%,#f8fafc_100%)]",
+      "bg-[radial-gradient(circle_at_top_left,#0f766e_0%,#0d9488_35%,#0ea5e9_100%)]",
     borderClass: "border-teal-300",
     ringClass: "focus:ring-teal-400/45",
   },
@@ -45,7 +45,7 @@ export const THEMES: Record<
     canvasClass:
       "bg-[radial-gradient(circle_at_12%_14%,rgba(251,146,60,0.24),transparent_28%),radial-gradient(circle_at_84%_10%,rgba(250,204,21,0.2),transparent_24%),linear-gradient(180deg,#fff7ed_0%,#ffedd5_100%)]",
     heroClass:
-      "bg-[radial-gradient(circle_at_top_left,#fed7aa_0%,#ffedd5_35%,#fafaf9_100%)]",
+      "bg-[radial-gradient(circle_at_top_left,#9a3412_0%,#c2410c_36%,#ea580c_100%)]",
     borderClass: "border-orange-300",
     ringClass: "focus:ring-orange-400/45",
   },

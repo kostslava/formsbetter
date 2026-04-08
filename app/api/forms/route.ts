@@ -4,14 +4,14 @@ import {
   isValidFieldArray,
   jsonError,
   normalizeTheme,
-  requireCreatorToken,
+  requireFirebaseUserId,
   SHORT_CODE_LENGTH,
 } from "@/lib/server-api";
 
 export async function GET(request: Request) {
-  const creatorToken = requireCreatorToken(request);
-  if (!creatorToken) {
-    return jsonError("Missing creator token", 401);
+  const creatorUid = await requireFirebaseUserId(request);
+  if (!creatorUid) {
+    return jsonError("Unauthorized", 401);
   }
 
   try {
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase
       .from("forms")
       .select("id, title, description, short_code, theme_id, created_at")
-      .eq("creator_token", creatorToken)
+      .eq("creator_token", creatorUid)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -43,15 +43,15 @@ export async function POST(request: Request) {
   }
 
   const payload = body as {
-    creatorToken?: string;
     title?: string;
     description?: string;
     themeId?: string;
     fields?: unknown;
   };
 
-  if (!payload.creatorToken || payload.creatorToken.trim().length < 16) {
-    return jsonError("Invalid creator token", 401);
+  const creatorUid = await requireFirebaseUserId(request);
+  if (!creatorUid) {
+    return jsonError("Unauthorized", 401);
   }
 
   if (!payload.title || payload.title.trim().length < 2) {
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
         theme_id: themeId,
         fields: payload.fields,
         short_code: shortCode,
-        creator_token: payload.creatorToken,
+        creator_token: creatorUid,
       })
       .select("id, short_code")
       .single();

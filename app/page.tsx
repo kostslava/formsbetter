@@ -3,28 +3,40 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { BarChart3, Copy, Plus, Sparkles } from "lucide-react";
-import { getOrCreateCreatorToken } from "@/lib/creator-token";
+import { signOut } from "firebase/auth";
+import { BarChart3, Copy, LogOut, Plus, Sparkles } from "lucide-react";
+import { AuthPanel } from "@/components/auth-panel";
+import { firebaseAuth } from "@/lib/firebase-client";
 import { THEMES } from "@/lib/theme";
+import { authHeader, useAuthUser } from "@/lib/use-auth-user";
 import { cn } from "@/lib/utils";
 import { FormRecord } from "@/lib/types";
 
 export default function Dashboard() {
+  const { user, loading: authLoading } = useAuthUser();
   const [forms, setForms] = useState<FormRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
+    if (!user) {
+      setForms([]);
+      setLoading(false);
+      return;
+    }
+
     async function loadForms() {
       setLoading(true);
       setError(null);
 
       try {
-        const creatorToken = getOrCreateCreatorToken();
+        const headers = await authHeader(user);
         const response = await fetch("/api/forms", {
-          headers: {
-            "x-creator-token": creatorToken,
-          },
+          headers,
         });
 
         const data = (await response.json()) as { forms?: FormRecord[]; error?: string };
@@ -42,7 +54,25 @@ export default function Dashboard() {
     }
 
     void loadForms();
-  }, []);
+  }, [authLoading, user]);
+
+  if (authLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center px-4">
+        <p className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm">
+          Checking account...
+        </p>
+      </main>
+    );
+  }
+
+  if (!user) {
+    return (
+      <main className="grain-layer flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_15%_12%,rgba(14,165,233,0.18),transparent_28%),radial-gradient(circle_at_82%_18%,rgba(249,115,22,0.18),transparent_24%),linear-gradient(180deg,#f8fafc_0%,#e2e8f0_100%)] px-4 py-10">
+        <AuthPanel />
+      </main>
+    );
+  }
 
   return (
     <main className="grain-layer min-h-screen bg-[radial-gradient(circle_at_12%_8%,rgba(147,197,253,0.22),transparent_28%),radial-gradient(circle_at_88%_16%,rgba(244,114,182,0.18),transparent_25%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)] px-4 py-10 sm:px-6">
@@ -61,6 +91,7 @@ export default function Dashboard() {
                 <Sparkles size={14} />
                 FormsBetter Studio
               </div>
+              <p className="text-xs font-medium text-slate-500">Signed in as {user.email}</p>
               <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-slate-900 md:text-5xl">
                 Build immersive forms, not plain documents.
               </h1>
@@ -69,13 +100,27 @@ export default function Dashboard() {
               </p>
             </div>
 
-            <Link
-              href="/create"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
-            >
-              <Plus size={18} />
-              New Form
-            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href="/create"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+              >
+                <Plus size={18} />
+                New Form
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  if (firebaseAuth) {
+                    void signOut(firebaseAuth);
+                  }
+                }}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                <LogOut size={16} />
+                Sign out
+              </button>
+            </div>
           </div>
         </motion.section>
 

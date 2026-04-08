@@ -1,13 +1,13 @@
 import { createSupabaseServiceClient } from "@/lib/supabase";
-import { jsonError, requireCreatorToken } from "@/lib/server-api";
+import { jsonError, requireFirebaseUserId } from "@/lib/server-api";
 
 export async function GET(
   request: Request,
   context: RouteContext<"/api/forms/[formId]/responses">
 ) {
-  const creatorToken = requireCreatorToken(request);
-  if (!creatorToken) {
-    return jsonError("Missing creator token", 401);
+  const creatorUid = await requireFirebaseUserId(request);
+  if (!creatorUid) {
+    return jsonError("Unauthorized", 401);
   }
 
   const { formId } = await context.params;
@@ -19,7 +19,7 @@ export async function GET(
       .from("forms")
       .select("id, title, description, short_code, theme_id, fields, created_at")
       .eq("id", formId)
-      .eq("creator_token", creatorToken)
+      .eq("creator_token", creatorUid)
       .maybeSingle();
 
     if (formError) {
@@ -27,7 +27,7 @@ export async function GET(
     }
 
     if (!form) {
-      return jsonError("Form not found for this creator token", 404);
+      return jsonError("Form not found for this account", 404);
     }
 
     const { data: responses, error: responseError } = await supabase

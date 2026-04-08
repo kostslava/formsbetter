@@ -3,10 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { useParams, useSearchParams } from "next/navigation";
-import { ArrowLeft, Download, LoaderCircle } from "lucide-react";
-import { getOrCreateCreatorToken, setCreatorToken } from "@/lib/creator-token";
+import { signOut } from "firebase/auth";
+import { useParams } from "next/navigation";
+import { ArrowLeft, Download, LoaderCircle, LogOut } from "lucide-react";
+import { AuthPanel } from "@/components/auth-panel";
+import { firebaseAuth } from "@/lib/firebase-client";
 import { THEMES } from "@/lib/theme";
+import { authHeader, useAuthUser } from "@/lib/use-auth-user";
 import { FormRecord, FormResponseRecord } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -20,18 +23,23 @@ function csvEscape(value: string): string {
 }
 
 export default function ResultsPage() {
+  const { user, loading: authLoading } = useAuthUser();
   const params = useParams<{ id: string }>();
-  const searchParams = useSearchParams();
   const formId = params.id;
-  const keyFromQuery = searchParams.get("key");
 
   const [payload, setPayload] = useState<ResultsPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (keyFromQuery) {
-      setCreatorToken(keyFromQuery);
+    if (authLoading) {
+      return;
+    }
+
+    if (!user) {
+      setPayload(null);
+      setLoading(false);
+      return;
     }
 
     async function loadResults() {
@@ -39,11 +47,9 @@ export default function ResultsPage() {
       setError(null);
 
       try {
-        const creatorToken = keyFromQuery || getOrCreateCreatorToken();
+        const headers = await authHeader(user);
         const response = await fetch(`/api/forms/${formId}/responses`, {
-          headers: {
-            "x-creator-token": creatorToken,
-          },
+          headers,
         });
 
         const data = (await response.json()) as
@@ -66,7 +72,7 @@ export default function ResultsPage() {
     }
 
     void loadResults();
-  }, [formId, keyFromQuery]);
+  }, [authLoading, formId, user]);
 
   const theme = useMemo(() => {
     if (!payload) {
@@ -107,6 +113,24 @@ export default function ResultsPage() {
     link.click();
     URL.revokeObjectURL(url);
   };
+
+  if (authLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center px-4">
+        <p className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm">
+          Checking account...
+        </p>
+      </main>
+    );
+  }
+
+  if (!user) {
+    return (
+      <main className="grain-layer flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_14%_12%,rgba(56,189,248,0.18),transparent_28%),radial-gradient(circle_at_86%_16%,rgba(249,115,22,0.16),transparent_24%),linear-gradient(180deg,#f8fafc_0%,#e2e8f0_100%)] px-4 py-10">
+        <AuthPanel title="Sign in to view responses" subtitle="Results are private to your Firebase account." />
+      </main>
+    );
+  }
 
   if (loading) {
     return (
@@ -151,6 +175,7 @@ export default function ResultsPage() {
                 <ArrowLeft size={14} />
                 Dashboard
               </Link>
+              <p className="text-xs text-slate-500">Signed in as {user.email ?? "anonymous"}</p>
               <h1 className="text-3xl font-semibold text-slate-900">{payload.form.title}</h1>
               <p className="text-sm text-slate-600">
                 {payload.responses.length} response{payload.responses.length === 1 ? "" : "s"}
@@ -158,6 +183,18 @@ export default function ResultsPage() {
             </div>
 
             <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (firebaseAuth) {
+                    void signOut(firebaseAuth);
+                  }
+                }}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                <LogOut size={14} />
+                Sign out
+              </button>
               <a
                 href={`/f/${payload.form.short_code}`}
                 target="_blank"

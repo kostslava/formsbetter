@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { motion, Reorder, useDragControls } from "framer-motion";
+import { signOut } from "firebase/auth";
 import {
   Check,
   Copy,
@@ -20,8 +21,10 @@ import {
   Wand2,
   X,
 } from "lucide-react";
-import { getOrCreateCreatorToken } from "@/lib/creator-token";
+import { AuthPanel } from "@/components/auth-panel";
+import { firebaseAuth } from "@/lib/firebase-client";
 import { DEFAULT_THEME, THEMES } from "@/lib/theme";
+import { authHeader, useAuthUser } from "@/lib/use-auth-user";
 import { cn } from "@/lib/utils";
 import { FormField, FormThemeId } from "@/lib/types";
 
@@ -221,13 +224,13 @@ function FieldCard({
 }
 
 export default function CreateFormPage() {
+  const { user, loading: authLoading } = useAuthUser();
   const [title, setTitle] = useState("Night Signal Intake");
   const [description, setDescription] = useState(
     "Curate a unique response experience. Drag blocks, tune style, and publish in one click."
   );
   const [themeId, setThemeId] = useState<FormThemeId>(DEFAULT_THEME);
   const [fields, setFields] = useState<FormField[]>([newField("short_text")]);
-  const [creatorToken, setCreatorToken] = useState("");
   const [origin, setOrigin] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploadingFieldId, setUploadingFieldId] = useState<string | null>(null);
@@ -239,7 +242,6 @@ export default function CreateFormPage() {
   });
 
   useEffect(() => {
-    setCreatorToken(getOrCreateCreatorToken());
     setOrigin(window.location.origin);
   }, []);
 
@@ -287,8 +289,8 @@ export default function CreateFormPage() {
       return;
     }
 
-    if (!creatorToken) {
-      setError("Creator token not ready yet. Refresh and retry.");
+    if (!user) {
+      setError("Sign in to upload images.");
       return;
     }
 
@@ -298,12 +300,11 @@ export default function CreateFormPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
+      const headers = await authHeader(user);
 
       const response = await fetch("/api/uploads", {
         method: "POST",
-        headers: {
-          "x-creator-token": creatorToken,
-        },
+        headers,
         body: formData,
       });
 
@@ -330,8 +331,8 @@ export default function CreateFormPage() {
   };
 
   const saveForm = async () => {
-    if (!creatorToken) {
-      setError("Creator token not ready yet. Refresh and retry.");
+    if (!user) {
+      setError("Sign in to publish forms.");
       return;
     }
 
@@ -354,13 +355,14 @@ export default function CreateFormPage() {
     setError(null);
 
     try {
+      const headers = await authHeader(user);
       const response = await fetch("/api/forms", {
         method: "POST",
         headers: {
+          ...headers,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          creatorToken,
           title,
           description,
           themeId,
@@ -379,7 +381,7 @@ export default function CreateFormPage() {
 
       const baseOrigin = origin || window.location.origin;
       const publicUrl = `${baseOrigin}/f/${data.form.short_code}`;
-      const manageUrl = `${baseOrigin}/r/${data.form.id}?key=${creatorToken}`;
+  const manageUrl = `${baseOrigin}/r/${data.form.id}`;
 
       setSaveModal({
         open: true,
@@ -394,6 +396,24 @@ export default function CreateFormPage() {
   };
 
   const previewFieldCount = fields.filter((field) => field.type !== "image").length;
+
+  if (authLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center px-4">
+        <p className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm">
+          Checking account...
+        </p>
+      </main>
+    );
+  }
+
+  if (!user) {
+    return (
+      <main className="grain-layer flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_12%_10%,rgba(56,189,248,0.18),transparent_28%),radial-gradient(circle_at_84%_16%,rgba(249,115,22,0.16),transparent_24%),linear-gradient(180deg,#f8fafc_0%,#e2e8f0_100%)] px-4 py-10">
+        <AuthPanel title="Sign in to build forms" subtitle="Your forms and uploads are now scoped by your Pontune Firebase account." />
+      </main>
+    );
+  }
 
   return (
     <main className={cn("grain-layer min-h-screen px-4 py-8 sm:px-6 sm:py-10", selectedTheme.canvasClass)}>
@@ -410,19 +430,35 @@ export default function CreateFormPage() {
         <section className="space-y-5">
           <div className="rounded-2xl border border-white/25 bg-black/25 p-4 text-white shadow-xl backdrop-blur md:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <Link href="/" className="text-sm font-semibold text-white/80 transition hover:text-white">
-                Back to dashboard
-              </Link>
+              <div className="space-y-1">
+                <Link href="/" className="text-sm font-semibold text-white/80 transition hover:text-white">
+                  Back to dashboard
+                </Link>
+                <p className="text-xs text-white/70">Signed in as {user.email ?? "anonymous"}</p>
+              </div>
 
-              <button
-                type="button"
-                onClick={saveForm}
-                disabled={saving}
-                className="inline-flex items-center gap-2 rounded-xl bg-white/95 px-4 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {saving ? <LoaderCircle size={16} className="animate-spin" /> : <Save size={16} />}
-                {saving ? "Publishing..." : "Publish form"}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (firebaseAuth) {
+                      void signOut(firebaseAuth);
+                    }
+                  }}
+                  className="rounded-xl border border-white/25 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/20"
+                >
+                  Sign out
+                </button>
+                <button
+                  type="button"
+                  onClick={saveForm}
+                  disabled={saving}
+                  className="inline-flex items-center gap-2 rounded-xl bg-white/95 px-4 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {saving ? <LoaderCircle size={16} className="animate-spin" /> : <Save size={16} />}
+                  {saving ? "Publishing..." : "Publish form"}
+                </button>
+              </div>
             </div>
           </div>
 
