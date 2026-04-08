@@ -10,7 +10,7 @@ import { AuthPanel } from "@/components/auth-panel";
 import { firebaseAuth } from "@/lib/firebase-client";
 import { THEMES } from "@/lib/theme";
 import { authHeader, useAuthUser } from "@/lib/use-auth-user";
-import { FormRecord, FormResponseRecord } from "@/lib/types";
+import { FormAnswerValue, FormRecord, FormResponseRecord } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface ResultsPayload {
@@ -20,6 +20,18 @@ interface ResultsPayload {
 
 function csvEscape(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
+}
+
+function answerToText(value: FormAnswerValue | undefined): string {
+  if (value === undefined || value === null) {
+    return "";
+  }
+
+  if (Array.isArray(value)) {
+    return value.join(" | ");
+  }
+
+  return String(value);
 }
 
 export default function ResultsPage() {
@@ -98,7 +110,7 @@ export default function ResultsPage() {
         csvEscape(new Date(response.created_at).toISOString()),
         ...payload.form.fields
           .filter((field) => field.type !== "image")
-          .map((field) => csvEscape(response.answers[field.id] || "")),
+          .map((field) => csvEscape(answerToText(response.answers[field.id]))),
       ];
 
       return values.join(",");
@@ -248,9 +260,7 @@ export default function ResultsPage() {
                         .filter((field) => field.type !== "image")
                         .map((field) => (
                           <td key={field.id} className="px-4 py-3 align-top">
-                            {response.answers[field.id] || (
-                              <span className="text-slate-300">No answer</span>
-                            )}
+                            {answerToText(response.answers[field.id]) || <span className="text-slate-300">No answer</span>}
                           </td>
                         ))}
                     </tr>

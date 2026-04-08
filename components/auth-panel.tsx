@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { FirebaseError } from "firebase/app";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -12,6 +13,19 @@ import { firebaseAuth, googleProvider } from "@/lib/firebase-client";
 interface AuthPanelProps {
   title?: string;
   subtitle?: string;
+}
+
+function formatAuthError(error: unknown): string {
+  if (!(error instanceof FirebaseError)) {
+    return error instanceof Error ? error.message : "Auth failed";
+  }
+
+  if (error.code === "auth/unauthorized-domain") {
+    const host = typeof window !== "undefined" ? window.location.hostname : "this domain";
+    return `Google sign-in is blocked for ${host}. Add this domain in Firebase Console -> Authentication -> Settings -> Authorized domains.`;
+  }
+
+  return error.message || "Auth failed";
 }
 
 export function AuthPanel({
@@ -41,7 +55,7 @@ export function AuthPanel({
         await createUserWithEmailAndPassword(firebaseAuth, email, password);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Auth failed");
+      setError(formatAuthError(err));
     } finally {
       setWorking(false);
     }
@@ -59,7 +73,7 @@ export function AuthPanel({
     try {
       await signInWithPopup(firebaseAuth, googleProvider);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Google sign in failed");
+      setError(formatAuthError(err));
     } finally {
       setWorking(false);
     }

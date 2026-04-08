@@ -1,4 +1,4 @@
-import { FormField, FormThemeId } from "@/lib/types";
+import { FormField, FormSection, FormThemeId } from "@/lib/types";
 import { verifyFirebaseIdToken } from "@/lib/firebase-server";
 
 export const SHORT_CODE_LENGTH = 7;
@@ -54,7 +54,10 @@ export function isValidFieldArray(fields: unknown): fields is FormField[] {
     if (
       f.type !== "short_text" &&
       f.type !== "paragraph" &&
-      f.type !== "image"
+      f.type !== "image" &&
+      f.type !== "multiple_choice" &&
+      f.type !== "checkbox" &&
+      f.type !== "rating"
     ) {
       return false;
     }
@@ -67,6 +70,73 @@ export function isValidFieldArray(fields: unknown): fields is FormField[] {
       return false;
     }
 
+    if ((f.type === "multiple_choice" || f.type === "checkbox") && !Array.isArray(f.options)) {
+      return false;
+    }
+
+    if ((f.type === "multiple_choice" || f.type === "checkbox") && Array.isArray(f.options)) {
+      if (f.options.length < 2) {
+        return false;
+      }
+
+      if (f.options.some((option) => typeof option !== "string" || option.trim().length === 0)) {
+        return false;
+      }
+    }
+
+    if (f.type === "checkbox") {
+      if (
+        f.minSelections !== undefined &&
+        (!Number.isInteger(f.minSelections) || f.minSelections < 0)
+      ) {
+        return false;
+      }
+
+      if (
+        f.maxSelections !== undefined &&
+        (!Number.isInteger(f.maxSelections) || f.maxSelections < 1)
+      ) {
+        return false;
+      }
+
+      if (
+        f.minSelections !== undefined &&
+        f.maxSelections !== undefined &&
+        f.minSelections > f.maxSelections
+      ) {
+        return false;
+      }
+    }
+
+    if (
+      f.type === "rating" &&
+      (f.maxRating === undefined || !Number.isInteger(f.maxRating) || f.maxRating < 2 || f.maxRating > 10)
+    ) {
+      return false;
+    }
+
     return true;
+  });
+}
+
+export function isValidSectionArray(sections: unknown): sections is FormSection[] {
+  if (!Array.isArray(sections) || sections.length === 0) {
+    return false;
+  }
+
+  return sections.every((section) => {
+    if (!section || typeof section !== "object") {
+      return false;
+    }
+
+    const value = section as Partial<FormSection>;
+
+    return (
+      typeof value.id === "string" &&
+      value.id.trim().length > 0 &&
+      typeof value.title === "string" &&
+      value.title.trim().length > 0 &&
+      (value.description === undefined || typeof value.description === "string")
+    );
   });
 }

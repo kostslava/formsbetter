@@ -1,6 +1,22 @@
 import { createSupabaseServiceClient } from "@/lib/supabase";
 import { jsonError } from "@/lib/server-api";
 
+function isValidAnswerValue(value: unknown): boolean {
+  if (typeof value === "string") {
+    return true;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.every((item) => typeof item === "string");
+  }
+
+  return false;
+}
+
 export async function POST(request: Request) {
   let body: unknown;
 
@@ -12,7 +28,7 @@ export async function POST(request: Request) {
 
   const payload = body as {
     formId?: string;
-    answers?: Record<string, string>;
+    answers?: Record<string, unknown>;
   };
 
   if (!payload.formId) {
@@ -21,6 +37,11 @@ export async function POST(request: Request) {
 
   if (!payload.answers || typeof payload.answers !== "object") {
     return jsonError("Missing answers");
+  }
+
+  const invalidAnswer = Object.values(payload.answers).some((value) => !isValidAnswerValue(value));
+  if (invalidAnswer) {
+    return jsonError("Invalid answer value format");
   }
 
   try {

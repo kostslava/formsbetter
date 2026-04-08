@@ -12,7 +12,7 @@ export async function GET(
 
     const { data, error } = await supabase
       .from("forms")
-      .select("id, title, description, short_code, theme_id, fields, created_at")
+      .select("id, title, description, short_code, theme_id, fields, sections, created_at")
       .eq("short_code", shortCode)
       .maybeSingle();
 

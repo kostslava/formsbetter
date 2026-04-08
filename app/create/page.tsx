@@ -1,24 +1,25 @@
 "use client";
 
-import { ChangeEvent, PointerEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
-import { motion, Reorder, useDragControls } from "framer-motion";
+import { motion } from "framer-motion";
 import { signOut } from "firebase/auth";
 import {
   Check,
+  CheckSquare,
   Copy,
-  GripVertical,
+  Gauge,
   ImageIcon,
+  ListChecks,
   LoaderCircle,
   Palette,
-  PlusCircle,
   Save,
+  Star,
   Text,
   Trash2,
   Type,
-  Wand2,
   X,
 } from "lucide-react";
 import { AuthPanel } from "@/components/auth-panel";
@@ -26,7 +27,7 @@ import { firebaseAuth } from "@/lib/firebase-client";
 import { DEFAULT_THEME, THEMES } from "@/lib/theme";
 import { authHeader, useAuthUser } from "@/lib/use-auth-user";
 import { cn } from "@/lib/utils";
-import { FormField, FormThemeId } from "@/lib/types";
+import { FormField, FormSection, FormThemeId } from "@/lib/types";
 
 interface SaveModalState {
   open: boolean;
@@ -34,203 +35,73 @@ interface SaveModalState {
   manageUrl: string;
 }
 
-function newField(type: FormField["type"]): FormField {
+function newSection(index: number): FormSection {
+  return {
+    id: crypto.randomUUID(),
+    title: `Section ${index}`,
+    description: "",
+  };
+}
+
+function newField(type: FormField["type"], sectionId: string): FormField {
+  const base = {
+    id: crypto.randomUUID(),
+    sectionId,
+    label: "",
+    required: true,
+  };
+
   if (type === "image") {
     return {
-      id: crypto.randomUUID(),
+      ...base,
       type,
-      label: "Visual block",
       required: false,
       imageUrl: "",
     };
   }
 
+  if (type === "multiple_choice") {
+    return {
+      ...base,
+      type,
+      options: ["", ""],
+    };
+  }
+
+  if (type === "checkbox") {
+    return {
+      ...base,
+      type,
+      required: false,
+      options: ["", ""],
+      minSelections: 0,
+      maxSelections: 2,
+    };
+  }
+
+  if (type === "rating") {
+    return {
+      ...base,
+      type,
+      maxRating: 5,
+    };
+  }
+
   return {
-    id: crypto.randomUUID(),
+    ...base,
     type,
-    label: type === "paragraph" ? "Long-form question" : "Quick question",
-    placeholder: type === "paragraph" ? "Type a detailed answer" : "Type your answer",
-    required: true,
+    placeholder: "",
   };
-}
-
-interface FieldCardProps {
-  field: FormField;
-  fieldsCount: number;
-  uploadingFieldId: string | null;
-  onUpdate: (fieldId: string, patch: Partial<FormField>) => void;
-  onRemove: (fieldId: string) => void;
-  onUpload: (fieldId: string, event: ChangeEvent<HTMLInputElement>) => Promise<void>;
-  onDuplicate: (fieldId: string) => void;
-  theme: (typeof THEMES)[FormThemeId];
-}
-
-function FieldCard({
-  field,
-  fieldsCount,
-  uploadingFieldId,
-  onUpdate,
-  onRemove,
-  onUpload,
-  onDuplicate,
-  theme,
-}: FieldCardProps) {
-  const dragControls = useDragControls();
-
-  const startDrag = (event: PointerEvent<HTMLButtonElement>) => {
-    dragControls.start(event);
-  };
-
-  return (
-    <Reorder.Item
-      value={field}
-      id={field.id}
-      dragListener={false}
-      dragControls={dragControls}
-      className="list-none"
-      whileDrag={{ scale: 1.01, rotate: 0.25 }}
-      transition={{ type: "spring", bounce: 0.12, duration: 0.25 }}
-    >
-      <motion.section
-        layout
-        initial={{ opacity: 0, y: 14 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -8 }}
-        className="rounded-2xl border border-white/35 bg-white/85 p-4 shadow-md backdrop-blur-sm sm:p-5"
-      >
-        <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap">
-          <button
-            type="button"
-            onPointerDown={startDrag}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
-            aria-label="Drag field"
-          >
-            <GripVertical size={17} />
-          </button>
-
-          <div className="min-w-0 flex-1">
-            <input
-              value={field.label}
-              onChange={(event) => onUpdate(field.id, { label: event.target.value })}
-              placeholder="Question label"
-              className={cn(
-                "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 outline-none ring-0 transition focus:ring-2",
-                theme.ringClass
-              )}
-            />
-
-            {field.type !== "image" && (
-              <input
-                value={field.placeholder || ""}
-                onChange={(event) =>
-                  onUpdate(field.id, { placeholder: event.target.value })
-                }
-                placeholder="Placeholder text"
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 outline-none ring-0 transition focus:ring-2 focus:ring-slate-300/70"
-              />
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onDuplicate(field.id)}
-              className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              Duplicate
-            </button>
-            <button
-              type="button"
-              onClick={() => onRemove(field.id)}
-              disabled={fieldsCount === 1}
-              className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-30"
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        </div>
-
-        {field.type === "image" ? (
-          <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-4">
-            {field.imageUrl ? (
-              <div className="space-y-3">
-                <Image
-                  src={field.imageUrl}
-                  alt={field.label || "Uploaded image"}
-                  width={1200}
-                  height={560}
-                  className="max-h-80 w-full rounded-lg object-cover"
-                />
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">
-                  Replace image
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp,image/gif"
-                    className="hidden"
-                    onChange={(event) => {
-                      void onUpload(field.id, event);
-                    }}
-                  />
-                </label>
-              </div>
-            ) : (
-              <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg bg-white px-4 py-6 text-center text-sm text-slate-600 transition hover:bg-slate-100">
-                {uploadingFieldId === field.id ? (
-                  <LoaderCircle size={18} className="animate-spin" />
-                ) : (
-                  <ImageIcon size={18} />
-                )}
-                Add an image to make this form more visual.
-                <span className="text-xs text-slate-500">PNG, JPG, WEBP, GIF. Up to 5MB.</span>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif"
-                  className="hidden"
-                  onChange={(event) => {
-                    void onUpload(field.id, event);
-                  }}
-                />
-              </label>
-            )}
-          </div>
-        ) : field.type === "paragraph" ? (
-          <textarea
-            disabled
-            rows={4}
-            value={field.placeholder || "Long answer"}
-            className="mt-4 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-400"
-          />
-        ) : (
-          <input
-            disabled
-            value={field.placeholder || "Short answer"}
-            className="mt-4 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-400"
-          />
-        )}
-
-        {field.type !== "image" && (
-          <label className="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-slate-600">
-            <input
-              type="checkbox"
-              checked={field.required}
-              onChange={(event) => onUpdate(field.id, { required: event.target.checked })}
-            />
-            Required answer
-          </label>
-        )}
-      </motion.section>
-    </Reorder.Item>
-  );
 }
 
 export default function CreateFormPage() {
   const { user, loading: authLoading } = useAuthUser();
-  const [title, setTitle] = useState("Night Signal Intake");
-  const [description, setDescription] = useState(
-    "Curate a unique response experience. Drag blocks, tune style, and publish in one click."
-  );
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [themeId, setThemeId] = useState<FormThemeId>(DEFAULT_THEME);
-  const [fields, setFields] = useState<FormField[]>([newField("short_text")]);
+  const [sections, setSections] = useState<FormSection[]>(() => [newSection(1)]);
+  const [activeSectionId, setActiveSectionId] = useState("");
+  const [fields, setFields] = useState<FormField[]>([]);
   const [origin, setOrigin] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploadingFieldId, setUploadingFieldId] = useState<string | null>(null);
@@ -242,23 +113,70 @@ export default function CreateFormPage() {
   });
 
   useEffect(() => {
+    const firstSection = sections[0];
+    if (!firstSection) {
+      return;
+    }
+
+    if (!activeSectionId) {
+      setActiveSectionId(firstSection.id);
+    }
+
+    if (fields.length === 0) {
+      setFields([newField("short_text", firstSection.id)]);
+    }
+  }, [activeSectionId, fields.length, sections]);
+
+  useEffect(() => {
     setOrigin(window.location.origin);
   }, []);
 
   const selectedTheme = useMemo(() => THEMES[themeId], [themeId]);
 
   const updateField = (fieldId: string, patch: Partial<FormField>) => {
+    setFields((prev) => prev.map((field) => (field.id === fieldId ? { ...field, ...patch } : field)));
+  };
+
+  const addOption = (fieldId: string) => {
     setFields((prev) =>
-      prev.map((field) => (field.id === fieldId ? { ...field, ...patch } : field))
+      prev.map((field) => {
+        if (field.id !== fieldId || !Array.isArray(field.options)) {
+          return field;
+        }
+
+        return { ...field, options: [...field.options, ""] };
+      })
+    );
+  };
+
+  const updateOption = (fieldId: string, index: number, value: string) => {
+    setFields((prev) =>
+      prev.map((field) => {
+        if (field.id !== fieldId || !Array.isArray(field.options)) {
+          return field;
+        }
+
+        const options = [...field.options];
+        options[index] = value;
+        return { ...field, options };
+      })
+    );
+  };
+
+  const removeOption = (fieldId: string, index: number) => {
+    setFields((prev) =>
+      prev.map((field) => {
+        if (field.id !== fieldId || !Array.isArray(field.options) || field.options.length <= 2) {
+          return field;
+        }
+
+        return { ...field, options: field.options.filter((_, optionIndex) => optionIndex !== index) };
+      })
     );
   };
 
   const removeField = (fieldId: string) => {
     setFields((prev) => prev.filter((field) => field.id !== fieldId));
-  };
-
-  const addField = (type: FormField["type"]) => {
-    setFields((prev) => [...prev, newField(type)]);
   };
 
   const duplicateField = (fieldId: string) => {
@@ -268,9 +186,8 @@ export default function CreateFormPage() {
         return prev;
       }
 
-      const source = prev[index];
       const clone: FormField = {
-        ...source,
+        ...prev[index],
         id: crypto.randomUUID(),
       };
 
@@ -280,17 +197,53 @@ export default function CreateFormPage() {
     });
   };
 
-  const handleImageUpload = async (
-    fieldId: string,
-    event: ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = event.target.files?.[0];
-    if (!file) {
+  const addField = (type: FormField["type"]) => {
+    if (!activeSectionId) {
       return;
     }
 
-    if (!user) {
-      setError("Sign in to upload images.");
+    setFields((prev) => [...prev, newField(type, activeSectionId)]);
+  };
+
+  const addSection = () => {
+    const section = newSection(sections.length + 1);
+    setSections((prev) => [...prev, section]);
+    setActiveSectionId(section.id);
+  };
+
+  const updateSection = (sectionId: string, patch: Partial<FormSection>) => {
+    setSections((prev) => prev.map((section) => (section.id === sectionId ? { ...section, ...patch } : section)));
+  };
+
+  const removeSection = (sectionId: string) => {
+    if (sections.length === 1) {
+      setError("At least one section is required.");
+      return;
+    }
+
+    const remaining = sections.filter((section) => section.id !== sectionId);
+    const fallbackId = remaining[0].id;
+    setSections(remaining);
+
+    setFields((prev) =>
+      prev.map((field) =>
+        field.sectionId === sectionId
+          ? {
+              ...field,
+              sectionId: fallbackId,
+            }
+          : field
+      )
+    );
+
+    if (activeSectionId === sectionId) {
+      setActiveSectionId(fallbackId);
+    }
+  };
+
+  const handleImageUpload = async (fieldId: string, event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user) {
       return;
     }
 
@@ -330,24 +283,76 @@ export default function CreateFormPage() {
     }
   };
 
-  const saveForm = async () => {
+  const validateBeforeSave = (): string | null => {
     if (!user) {
-      setError("Sign in to publish forms.");
-      return;
+      return "Sign in to publish forms.";
+    }
+
+    if (title.trim().length < 2) {
+      return "Add a form title (at least 2 characters).";
+    }
+
+    if (sections.some((section) => !section.title.trim())) {
+      return "Each section needs a title.";
     }
 
     if (fields.length === 0) {
-      setError("Add at least one field");
+      return "Add at least one field.";
+    }
+
+    for (const field of fields) {
+      if (!field.sectionId || !sections.some((section) => section.id === field.sectionId)) {
+        return "Every field must belong to a valid section.";
+      }
+
+      if (!field.label.trim()) {
+        return "Each field needs a title.";
+      }
+
+      if (field.type === "image" && !field.imageUrl) {
+        return "Every image block needs an uploaded image.";
+      }
+
+      if ((field.type === "multiple_choice" || field.type === "checkbox") && Array.isArray(field.options)) {
+        const choices = field.options.map((option) => option.trim()).filter(Boolean);
+        if (choices.length < 2) {
+          return "Choice fields need at least two non-empty options.";
+        }
+      }
+
+      if (field.type === "checkbox") {
+        const min = field.minSelections ?? 0;
+        const max = field.maxSelections ?? 1;
+        const optionCount = field.options?.filter((option) => option.trim().length > 0).length ?? 0;
+
+        if (min < 0 || max < 1 || min > max) {
+          return "Checkbox min/max values are invalid.";
+        }
+
+        if (max > optionCount) {
+          return "Checkbox max cannot exceed number of choices.";
+        }
+      }
+
+      if (field.type === "rating") {
+        const maxRating = field.maxRating ?? 0;
+        if (!Number.isInteger(maxRating) || maxRating < 2 || maxRating > 10) {
+          return "Rating scale must be between 2 and 10.";
+        }
+      }
+    }
+
+    return null;
+  };
+
+  const saveForm = async () => {
+    const validationError = validateBeforeSave();
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
-    if (fields.some((field) => !field.label.trim())) {
-      setError("Every field needs a label");
-      return;
-    }
-
-    if (fields.some((field) => field.type === "image" && !field.imageUrl)) {
-      setError("Every image block needs an uploaded image");
+    if (!user) {
       return;
     }
 
@@ -363,10 +368,22 @@ export default function CreateFormPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          title,
-          description,
+          title: title.trim(),
+          description: description.trim(),
           themeId,
-          fields,
+          sections: sections.map((section) => ({
+            ...section,
+            title: section.title.trim(),
+            description: section.description?.trim() || "",
+          })),
+          fields: fields.map((field) => ({
+            ...field,
+            label: field.label.trim(),
+            placeholder: field.placeholder?.trim() || "",
+            options: Array.isArray(field.options)
+              ? field.options.map((option) => option.trim()).filter(Boolean)
+              : undefined,
+          })),
         }),
       });
 
@@ -380,13 +397,10 @@ export default function CreateFormPage() {
       }
 
       const baseOrigin = origin || window.location.origin;
-      const publicUrl = `${baseOrigin}/f/${data.form.short_code}`;
-  const manageUrl = `${baseOrigin}/r/${data.form.id}`;
-
       setSaveModal({
         open: true,
-        publicUrl,
-        manageUrl,
+        publicUrl: `${baseOrigin}/f/${data.form.short_code}`,
+        manageUrl: `${baseOrigin}/r/${data.form.id}`,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save form");
@@ -395,7 +409,7 @@ export default function CreateFormPage() {
     }
   };
 
-  const previewFieldCount = fields.filter((field) => field.type !== "image").length;
+  const activeSection = sections.find((section) => section.id === activeSectionId) ?? sections[0];
 
   if (authLoading) {
     return (
@@ -410,25 +424,20 @@ export default function CreateFormPage() {
   if (!user) {
     return (
       <main className="grain-layer flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_12%_10%,rgba(56,189,248,0.18),transparent_28%),radial-gradient(circle_at_84%_16%,rgba(249,115,22,0.16),transparent_24%),linear-gradient(180deg,#f8fafc_0%,#e2e8f0_100%)] px-4 py-10">
-        <AuthPanel title="Sign in to build forms" subtitle="Your forms and uploads are now scoped by your Pontune Firebase account." />
+        <AuthPanel title="Sign in to build forms" subtitle="Your forms and sections are account-scoped." />
       </main>
     );
   }
 
   return (
     <main className={cn("grain-layer min-h-screen px-4 py-8 sm:px-6 sm:py-10", selectedTheme.canvasClass)}>
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="blob-float absolute -left-20 top-16 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
-        <div className="blob-float-slow absolute -right-20 top-24 h-72 w-72 rounded-full bg-cyan-300/15 blur-3xl" />
-      </div>
-
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         className="relative mx-auto grid w-full max-w-7xl gap-6 lg:grid-cols-[1.2fr,0.8fr]"
       >
         <section className="space-y-5">
-          <div className="rounded-2xl border border-white/25 bg-black/25 p-4 text-white shadow-xl backdrop-blur md:p-5">
+          <div className="rounded-2xl border border-white/25 bg-black/25 p-4 text-white shadow-xl backdrop-blur">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="space-y-1">
                 <Link href="/" className="text-sm font-semibold text-white/80 transition hover:text-white">
@@ -453,7 +462,7 @@ export default function CreateFormPage() {
                   type="button"
                   onClick={saveForm}
                   disabled={saving}
-                  className="inline-flex items-center gap-2 rounded-xl bg-white/95 px-4 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-xl bg-white/95 px-4 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-white disabled:opacity-60"
                 >
                   {saving ? <LoaderCircle size={16} className="animate-spin" /> : <Save size={16} />}
                   {saving ? "Publishing..." : "Publish form"}
@@ -462,23 +471,23 @@ export default function CreateFormPage() {
             </div>
           </div>
 
-          <section className={cn("rounded-3xl border bg-white/80 p-5 shadow-lg backdrop-blur sm:p-7", selectedTheme.borderClass)}>
+          <section className={cn("rounded-3xl border bg-white/85 p-5 shadow-lg backdrop-blur", selectedTheme.borderClass)}>
             <div className={cn("rounded-2xl p-6 text-white", selectedTheme.heroClass)}>
               <input
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                className="w-full bg-transparent text-3xl font-semibold tracking-tight text-white outline-none sm:text-4xl"
-                placeholder="Form title"
+                placeholder="Untitled form"
+                className="w-full bg-transparent text-3xl font-semibold tracking-tight text-white outline-none placeholder:text-white/70"
               />
               <textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                className="mt-4 min-h-20 w-full resize-y bg-transparent text-sm text-white/85 outline-none sm:text-base"
-                placeholder="Form description"
+                placeholder="Form description (optional)"
+                className="mt-3 min-h-20 w-full resize-y bg-transparent text-sm text-white/90 outline-none placeholder:text-white/70"
               />
             </div>
 
-            <div className="mt-5 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
+            <div className="mt-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
               <Palette size={14} />
               Style Presets
             </div>
@@ -501,170 +510,272 @@ export default function CreateFormPage() {
                     )}
                   >
                     <div className="flex items-center gap-2">
-                      <span
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{ backgroundColor: theme.accent }}
-                      />
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: theme.accent }} />
                       <span className="text-sm font-semibold">{theme.name}</span>
                     </div>
-                    <p className={cn("mt-1 text-xs", active ? "text-white/70" : "text-slate-500")}>
-                      {theme.mood}
-                    </p>
+                    <p className={cn("mt-1 text-xs", active ? "text-white/70" : "text-slate-500")}>{theme.mood}</p>
                   </button>
                 );
               })}
             </div>
           </section>
 
-          <div className="rounded-2xl border border-white/25 bg-white/65 p-3 shadow-lg backdrop-blur-sm sm:p-4">
-            <div className="mb-3 flex items-center justify-between gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
-              <div className="inline-flex items-center gap-2">
-                <Wand2 size={14} />
-                Builder Canvas
-              </div>
-              <span>Drag cards to reorder</span>
+          <section className="rounded-2xl border border-white/25 bg-white/75 p-4 shadow-lg backdrop-blur-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Sections</p>
+              <button
+                type="button"
+                onClick={addSection}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Add section
+              </button>
             </div>
 
-            <Reorder.Group
-              axis="y"
-              values={fields}
-              onReorder={setFields}
-              className="space-y-3"
-            >
-              {fields.map((field) => (
-                <FieldCard
-                  key={field.id}
-                  field={field}
-                  fieldsCount={fields.length}
-                  uploadingFieldId={uploadingFieldId}
-                  onUpdate={updateField}
-                  onRemove={removeField}
-                  onUpload={handleImageUpload}
-                  onDuplicate={duplicateField}
-                  theme={selectedTheme}
-                />
+            <div className="flex flex-wrap gap-2">
+              {sections.map((section) => (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => setActiveSectionId(section.id)}
+                  className={cn(
+                    "rounded-lg border px-3 py-1.5 text-xs font-semibold",
+                    section.id === activeSectionId
+                      ? "border-slate-900 bg-slate-900 text-white"
+                      : "border-slate-200 bg-white text-slate-700"
+                  )}
+                >
+                  {section.title || "Untitled section"}
+                </button>
               ))}
-            </Reorder.Group>
-          </div>
+            </div>
 
-          <section className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/25 bg-white/70 p-3 shadow-lg backdrop-blur-sm">
-            <button
-              type="button"
-              onClick={() => addField("short_text")}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              <Type size={16} />
-              Short text
-            </button>
-            <button
-              type="button"
-              onClick={() => addField("paragraph")}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              <Text size={16} />
-              Paragraph
-            </button>
-            <button
-              type="button"
-              onClick={() => addField("image")}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              <ImageIcon size={16} />
-              Image block
-            </button>
-            <button
-              type="button"
-              onClick={() => addField("short_text")}
-              className="ml-auto inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-            >
-              <PlusCircle size={16} />
-              Add item
-            </button>
+            {activeSection ? (
+              <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                <div className="space-y-2">
+                  <input
+                    value={activeSection.title}
+                    onChange={(event) => updateSection(activeSection.id, { title: event.target.value })}
+                    placeholder="Section title"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800"
+                  />
+                  <input
+                    value={activeSection.description || ""}
+                    onChange={(event) => updateSection(activeSection.id, { description: event.target.value })}
+                    placeholder="Section description (optional)"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeSection(activeSection.id)}
+                  className="h-fit rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-rose-50 hover:text-rose-700"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : null}
           </section>
 
-          {error && (
-            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-              {error}
+          <section className="rounded-2xl border border-white/25 bg-white/70 p-4 shadow-lg backdrop-blur-sm">
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
+              <span>Field types</span>
+              <span className="text-[10px] text-slate-500">(adds into selected section)</span>
             </div>
-          )}
+
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => addField("short_text")} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+                <Type size={16} />
+                Short text
+              </button>
+              <button type="button" onClick={() => addField("paragraph")} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+                <Text size={16} />
+                Paragraph
+              </button>
+              <button type="button" onClick={() => addField("multiple_choice")} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+                <ListChecks size={16} />
+                Multiple choice
+              </button>
+              <button type="button" onClick={() => addField("checkbox")} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+                <CheckSquare size={16} />
+                Checkbox group
+              </button>
+              <button type="button" onClick={() => addField("rating")} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+                <Gauge size={16} />
+                Rating
+              </button>
+              <button type="button" onClick={() => addField("image")} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+                <ImageIcon size={16} />
+                Image block
+              </button>
+            </div>
+          </section>
+
+          <div className="space-y-3">
+            {fields.map((field) => (
+              <section key={field.id} className="rounded-2xl border border-white/35 bg-white/90 p-4 shadow-sm">
+                <div className="flex flex-wrap items-start gap-2">
+                  <input
+                    value={field.label}
+                    onChange={(event) => updateField(field.id, { label: event.target.value })}
+                    placeholder="Question title"
+                    className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800"
+                  />
+                  <select
+                    value={field.sectionId || sections[0]?.id || ""}
+                    onChange={(event) => updateField(field.id, { sectionId: event.target.value })}
+                    className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                  >
+                    {sections.map((section) => (
+                      <option key={section.id} value={section.id}>{section.title}</option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={() => duplicateField(field.id)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+                    Duplicate
+                  </button>
+                  <button type="button" onClick={() => removeField(field.id)} disabled={fields.length <= 1} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 disabled:opacity-30">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+
+                {field.type === "short_text" || field.type === "paragraph" ? (
+                  <input
+                    value={field.placeholder || ""}
+                    onChange={(event) => updateField(field.id, { placeholder: event.target.value })}
+                    placeholder="Input placeholder"
+                    className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600"
+                  />
+                ) : null}
+
+                {(field.type === "multiple_choice" || field.type === "checkbox") && Array.isArray(field.options) ? (
+                  <div className="mt-3 space-y-2">
+                    {field.options.map((option, index) => (
+                      <div key={`${field.id}-${index}`} className="flex gap-2">
+                        <input
+                          value={option}
+                          onChange={(event) => updateOption(field.id, index, event.target.value)}
+                          placeholder={`Choice ${index + 1}`}
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                        />
+                        <button type="button" onClick={() => removeOption(field.id, index)} disabled={field.options!.length <= 2} className="rounded-lg border border-slate-200 px-2 py-2 text-slate-500 disabled:opacity-30">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => addOption(field.id)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
+                      Add option
+                    </button>
+                  </div>
+                ) : null}
+
+                {field.type === "checkbox" ? (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <input
+                      type="number"
+                      min={0}
+                      value={field.minSelections ?? 0}
+                      onChange={(event) => updateField(field.id, { minSelections: Number.parseInt(event.target.value || "0", 10) || 0 })}
+                      placeholder="Min selections"
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      value={field.maxSelections ?? 2}
+                      onChange={(event) => updateField(field.id, { maxSelections: Number.parseInt(event.target.value || "1", 10) || 1 })}
+                      placeholder="Max selections"
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    />
+                  </div>
+                ) : null}
+
+                {field.type === "rating" ? (
+                  <div className="mt-3">
+                    <input
+                      type="number"
+                      min={2}
+                      max={10}
+                      value={field.maxRating ?? 5}
+                      onChange={(event) => updateField(field.id, { maxRating: Math.min(10, Math.max(2, Number.parseInt(event.target.value || "5", 10) || 5)) })}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    />
+                    <div className="mt-2 flex gap-1">
+                      {Array.from({ length: field.maxRating ?? 5 }).map((_, index) => (
+                        <Star key={`${field.id}-star-${index}`} size={15} className="text-amber-400" />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {field.type === "image" ? (
+                  <div className="mt-3">
+                    {field.imageUrl ? (
+                      <Image src={field.imageUrl} alt={field.label || "Uploaded image"} width={1000} height={500} className="max-h-72 w-full rounded-lg object-cover" />
+                    ) : (
+                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+                        {uploadingFieldId === field.id ? <LoaderCircle size={15} className="animate-spin" /> : <ImageIcon size={15} />}
+                        Upload image
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/gif"
+                          className="hidden"
+                          onChange={(event) => {
+                            void handleImageUpload(field.id, event);
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                ) : null}
+
+                {field.type !== "image" ? (
+                  <label className="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-slate-600">
+                    <input type="checkbox" checked={field.required} onChange={(event) => updateField(field.id, { required: event.target.checked })} />
+                    Required answer
+                  </label>
+                ) : null}
+              </section>
+            ))}
+          </div>
+
+          {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
         </section>
 
         <aside className="lg:sticky lg:top-6 lg:h-fit">
-          <motion.section
-            initial={{ opacity: 0, x: 8 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="rounded-2xl border border-white/25 bg-black/40 p-5 text-white shadow-xl backdrop-blur"
-          >
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">
-              Live Snapshot
-            </p>
+          <section className="rounded-2xl border border-white/25 bg-black/40 p-5 text-white shadow-xl backdrop-blur">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">Live Snapshot</p>
             <h3 className="mt-2 text-xl font-semibold">{title || "Untitled form"}</h3>
             <p className="mt-2 text-sm text-white/75">{description || "No description"}</p>
 
             <div className="mt-5 grid grid-cols-2 gap-2 text-xs">
               <div className="rounded-xl border border-white/20 bg-white/10 p-3">
-                <p className="text-white/60">Questions</p>
-                <p className="mt-1 text-lg font-semibold">{previewFieldCount}</p>
+                <p className="text-white/60">Sections</p>
+                <p className="mt-1 text-lg font-semibold">{sections.length}</p>
               </div>
               <div className="rounded-xl border border-white/20 bg-white/10 p-3">
-                <p className="text-white/60">Visual blocks</p>
-                <p className="mt-1 text-lg font-semibold">
-                  {fields.filter((field) => field.type === "image").length}
-                </p>
+                <p className="text-white/60">Fields</p>
+                <p className="mt-1 text-lg font-semibold">{fields.length}</p>
               </div>
             </div>
 
-            <div className="mt-5 space-y-2">
-              {fields.slice(0, 4).map((field) => (
-                <div key={field.id} className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs">
-                  {field.label || "Untitled item"}
-                </div>
-              ))}
-              {fields.length > 4 && (
-                <div className="text-xs text-white/65">+ {fields.length - 4} more items</div>
-              )}
-            </div>
-
-            <p className="mt-6 text-xs text-white/60">
-              Tip: drag from the handle to reorder and shape your story-like flow.
-            </p>
-          </motion.section>
+            <p className="mt-5 text-xs text-white/65">Responders can go section by section with Next and Back buttons.</p>
+          </section>
         </aside>
       </motion.div>
 
-      {saveModal.open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-8"
-        >
-          <motion.div
-            initial={{ y: 20, opacity: 0, scale: 0.98 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            className="w-full max-w-2xl rounded-2xl border border-white/35 bg-white p-6 shadow-2xl sm:p-8"
-          >
+      {saveModal.open ? (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-8">
+          <motion.div initial={{ y: 20, opacity: 0, scale: 0.98 }} animate={{ y: 0, opacity: 1, scale: 1 }} className="w-full max-w-2xl rounded-2xl border border-white/35 bg-white p-6 shadow-2xl sm:p-8">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-2xl font-semibold text-slate-900">Form published</h2>
-              <button
-                type="button"
-                onClick={() =>
-                  setSaveModal({
-                    open: false,
-                    publicUrl: "",
-                    manageUrl: "",
-                  })
-                }
-                className="rounded-md p-2 text-slate-500 transition hover:bg-slate-100"
-              >
+              <button type="button" onClick={() => setSaveModal({ open: false, publicUrl: "", manageUrl: "" })} className="rounded-md p-2 text-slate-500 transition hover:bg-slate-100">
                 <X size={18} />
               </button>
             </div>
 
             <div className="grid gap-5 sm:grid-cols-[210px_1fr]">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  QR Share
-                </p>
+                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">QR Share</p>
                 <div className="rounded-lg bg-white p-2">
                   <QRCodeSVG value={saveModal.publicUrl} size={185} level="H" />
                 </div>
@@ -672,22 +783,10 @@ export default function CreateFormPage() {
 
               <div className="space-y-4">
                 <div>
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                    Public form link
-                  </p>
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Public form link</p>
                   <div className="flex rounded-lg border border-slate-200 bg-slate-50">
-                    <input
-                      readOnly
-                      value={saveModal.publicUrl}
-                      className="w-full bg-transparent px-3 py-2 text-xs font-medium text-slate-700 outline-none sm:text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void navigator.clipboard.writeText(saveModal.publicUrl);
-                      }}
-                      className="inline-flex items-center gap-1 border-l border-slate-200 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-                    >
+                    <input readOnly value={saveModal.publicUrl} className="w-full bg-transparent px-3 py-2 text-xs font-medium text-slate-700 outline-none sm:text-sm" />
+                    <button type="button" onClick={() => { void navigator.clipboard.writeText(saveModal.publicUrl); }} className="inline-flex items-center gap-1 border-l border-slate-200 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">
                       <Copy size={14} />
                       Copy
                     </button>
@@ -695,22 +794,10 @@ export default function CreateFormPage() {
                 </div>
 
                 <div>
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                    Results link
-                  </p>
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Results link</p>
                   <div className="flex rounded-lg border border-slate-200 bg-slate-50">
-                    <input
-                      readOnly
-                      value={saveModal.manageUrl}
-                      className="w-full bg-transparent px-3 py-2 text-xs font-medium text-slate-700 outline-none sm:text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void navigator.clipboard.writeText(saveModal.manageUrl);
-                      }}
-                      className="inline-flex items-center gap-1 border-l border-slate-200 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-                    >
+                    <input readOnly value={saveModal.manageUrl} className="w-full bg-transparent px-3 py-2 text-xs font-medium text-slate-700 outline-none sm:text-sm" />
+                    <button type="button" onClick={() => { void navigator.clipboard.writeText(saveModal.manageUrl); }} className="inline-flex items-center gap-1 border-l border-slate-200 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">
                       <Copy size={14} />
                       Copy
                     </button>
@@ -718,16 +805,10 @@ export default function CreateFormPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-2 pt-1">
-                  <Link
-                    href="/"
-                    className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
-                  >
+                  <Link href="/" className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-50">
                     Dashboard
                   </Link>
-                  <a
-                    href={saveModal.manageUrl}
-                    className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-                  >
+                  <a href={saveModal.manageUrl} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700">
                     <Check size={14} />
                     Open results
                   </a>
@@ -736,7 +817,7 @@ export default function CreateFormPage() {
             </div>
           </motion.div>
         </motion.div>
-      )}
+      ) : null}
     </main>
   );
 }

@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 import { createSupabaseServiceClient } from "@/lib/supabase";
 import {
   isValidFieldArray,
+  isValidSectionArray,
   jsonError,
   normalizeTheme,
   requireFirebaseUserId,
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
     description?: string;
     themeId?: string;
     fields?: unknown;
+    sections?: unknown;
   };
 
   const creatorUid = await requireFirebaseUserId(request);
@@ -60,6 +62,19 @@ export async function POST(request: Request) {
 
   if (!isValidFieldArray(payload.fields)) {
     return jsonError("Form must contain at least one valid field");
+  }
+
+  if (!isValidSectionArray(payload.sections)) {
+    return jsonError("Form must contain at least one valid section");
+  }
+
+  const sectionIds = new Set(payload.sections.map((section) => section.id));
+  const fieldsWithoutSection = payload.fields.filter(
+    (field) => !field.sectionId || !sectionIds.has(field.sectionId)
+  );
+
+  if (fieldsWithoutSection.length > 0) {
+    return jsonError("Each field must belong to an existing section");
   }
 
   const themeId = normalizeTheme(payload.themeId);
@@ -94,6 +109,7 @@ export async function POST(request: Request) {
         description: payload.description?.trim() ?? "",
         theme_id: themeId,
         fields: payload.fields,
+        sections: payload.sections,
         short_code: shortCode,
         creator_token: creatorUid,
       })
