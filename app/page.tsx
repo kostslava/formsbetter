@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { BarChart3, Copy, Plus, Sparkles } from "lucide-react";
 import { getOrCreateCreatorToken } from "@/lib/creator-token";
 import { THEMES } from "@/lib/theme";
+import { cn } from "@/lib/utils";
 import { FormRecord } from "@/lib/types";
 
 export default function Dashboard() {
@@ -43,42 +45,46 @@ export default function Dashboard() {
   }, []);
 
   return (
-    <main className="min-h-screen px-4 py-12 sm:px-6">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
-        <section className="relative overflow-hidden rounded-3xl border border-white/50 bg-white/80 p-7 shadow-lg backdrop-blur sm:p-10">
-          <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-violet-200/60 blur-3xl" />
-          <div className="absolute -bottom-16 left-28 h-48 w-48 rounded-full bg-cyan-200/70 blur-3xl" />
+    <main className="grain-layer min-h-screen bg-[radial-gradient(circle_at_12%_8%,rgba(147,197,253,0.22),transparent_28%),radial-gradient(circle_at_88%_16%,rgba(244,114,182,0.18),transparent_25%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)] px-4 py-10 sm:px-6">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative overflow-hidden rounded-3xl border border-white/70 bg-white/70 p-7 shadow-xl backdrop-blur md:p-10"
+        >
+          <div className="blob-float absolute -left-10 top-6 h-56 w-56 rounded-full bg-violet-300/30 blur-3xl" />
+          <div className="blob-float-slow absolute -right-16 top-3 h-64 w-64 rounded-full bg-cyan-300/25 blur-3xl" />
 
-          <div className="relative flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+          <div className="relative flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
             <div className="space-y-3">
-              <div className="inline-flex items-center gap-2 rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-violet-700">
+              <div className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-white">
                 <Sparkles size={14} />
                 FormsBetter Studio
               </div>
-              <h1 className="text-3xl font-semibold text-slate-900 sm:text-4xl">
-                Design forms that feel premium.
+              <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-slate-900 md:text-5xl">
+                Build immersive forms, not plain documents.
               </h1>
-              <p className="max-w-2xl text-sm text-slate-600 sm:text-base">
-                Build custom forms, share short links and QR codes instantly, and track every response in one dashboard.
+              <p className="max-w-2xl text-sm text-slate-600 md:text-base">
+                Craft a responsive, animated, mobile-first response flow with style presets and drag-first editing.
               </p>
             </div>
 
             <Link
               href="/create"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
             >
               <Plus size={18} />
               New Form
             </Link>
           </div>
-        </section>
+        </motion.section>
 
         {loading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: 3 }).map((_, idx) => (
               <div
                 key={`skeleton-${idx}`}
-                className="h-48 animate-pulse rounded-2xl border border-slate-200 bg-white"
+                className="h-52 animate-pulse rounded-2xl border border-slate-200 bg-white/80"
               />
             ))}
           </div>
@@ -87,50 +93,50 @@ export default function Dashboard() {
             {error}
           </div>
         ) : forms.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
-            <p className="text-lg font-medium text-slate-900">No forms yet</p>
+          <div className="rounded-3xl border border-dashed border-slate-300 bg-white/80 p-10 text-center shadow-sm backdrop-blur">
+            <p className="text-xl font-semibold text-slate-900">No forms yet</p>
             <p className="mt-2 text-sm text-slate-600">
-              Create your first form to start collecting responses.
+              Start by creating your first animated form experience.
             </p>
             <Link
               href="/create"
-              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 font-medium text-white transition hover:bg-violet-700"
+              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 font-medium text-white transition hover:bg-slate-700"
             >
               <Plus size={16} />
               Create Form
             </Link>
           </div>
         ) : (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {forms.map((form) => {
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {forms.map((form, idx) => {
               const theme = THEMES[form.theme_id] ?? THEMES.orchid;
 
               return (
-                <article
+                <motion.article
                   key={form.id}
-                  className="group flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
+                  initial={{ opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                  className="group flex h-full flex-col overflow-hidden rounded-2xl border border-white/60 bg-white/85 p-5 shadow-md backdrop-blur transition hover:-translate-y-1 hover:shadow-xl"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <span
-                      className="rounded-full px-2.5 py-1 text-xs font-semibold"
-                      style={{
-                        color: theme.accent,
-                        backgroundColor: theme.softBg,
-                      }}
-                    >
-                      {theme.name}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const url = `${window.location.origin}/f/${form.short_code}`;
-                        void navigator.clipboard.writeText(url);
-                      }}
-                      className="rounded-md p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
-                      aria-label="Copy form link"
-                    >
-                      <Copy size={16} />
-                    </button>
+                  <div className={cn("rounded-xl border p-3 text-white", theme.borderClass, theme.heroClass)}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-semibold">
+                        {theme.name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = `${window.location.origin}/f/${form.short_code}`;
+                          void navigator.clipboard.writeText(url);
+                        }}
+                        className="rounded-md bg-white/15 p-1.5 transition hover:bg-white/30"
+                        aria-label="Copy form link"
+                      >
+                        <Copy size={15} />
+                      </button>
+                    </div>
+                    <p className="mt-2 text-xs text-white/85">{theme.mood}</p>
                   </div>
 
                   <h2 className="mt-4 line-clamp-2 text-lg font-semibold text-slate-900">
@@ -145,7 +151,7 @@ export default function Dashboard() {
                       href={`/f/${form.short_code}`}
                       className="text-sm font-semibold text-slate-700 transition hover:text-slate-900"
                     >
-                      Open Form
+                      Open form
                     </Link>
                     <Link
                       href={`/r/${form.id}`}
@@ -155,7 +161,7 @@ export default function Dashboard() {
                       Results
                     </Link>
                   </div>
-                </article>
+                </motion.article>
               );
             })}
           </div>

@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { useParams, useSearchParams } from "next/navigation";
 import { ArrowLeft, Download, LoaderCircle } from "lucide-react";
 import { getOrCreateCreatorToken, setCreatorToken } from "@/lib/creator-token";
 import { THEMES } from "@/lib/theme";
 import { FormRecord, FormResponseRecord } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 interface ResultsPayload {
   form: FormRecord;
@@ -128,9 +130,18 @@ export default function ResultsPage() {
   }
 
   return (
-    <main className="min-h-screen px-4 py-10 sm:px-6">
+    <main className={cn("grain-layer min-h-screen px-4 py-10 sm:px-6", theme.canvasClass)}>
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="blob-float absolute -left-16 top-14 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
+        <div className="blob-float-slow absolute -right-16 top-20 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
+      </div>
+
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <section className="rounded-2xl border border-white/60 bg-white p-5 shadow-sm sm:p-7">
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl border border-white/50 bg-white/88 p-5 shadow-xl backdrop-blur sm:p-7"
+        >
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="space-y-2">
               <Link
@@ -167,14 +178,14 @@ export default function ResultsPage() {
           </div>
 
           <div className="mt-4 h-1.5 rounded-full" style={{ backgroundColor: theme.accent }} />
-        </section>
+        </motion.section>
 
         {payload.responses.length === 0 ? (
           <section className="rounded-2xl border border-dashed border-slate-300 bg-white px-8 py-14 text-center text-sm text-slate-600">
             No responses yet. Share the form URL to start collecting answers.
           </section>
         ) : (
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <section className="overflow-hidden rounded-2xl border border-white/50 bg-white/90 shadow-lg backdrop-blur">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px]">
                 <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">

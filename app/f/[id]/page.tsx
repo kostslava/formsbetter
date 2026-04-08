@@ -2,10 +2,12 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import { motion } from "framer-motion";
 import { useParams } from "next/navigation";
 import { CheckCircle2, LoaderCircle } from "lucide-react";
 import { THEMES } from "@/lib/theme";
 import { FormField, FormRecord } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 export default function FormViewPage() {
   const params = useParams<{ id: string }>();
@@ -121,9 +123,9 @@ export default function FormViewPage() {
 
   if (submitted) {
     return (
-      <main className="flex min-h-screen items-center justify-center px-4">
-        <section className="w-full max-w-xl rounded-2xl border border-emerald-200 bg-white p-8 text-center shadow-sm">
-          <CheckCircle2 className="mx-auto mb-3 text-emerald-500" size={30} />
+      <main className={cn("grain-layer flex min-h-screen items-center justify-center px-4", theme.canvasClass)}>
+        <section className="w-full max-w-xl rounded-2xl border border-white/50 bg-white/90 p-8 text-center shadow-xl backdrop-blur">
+          <CheckCircle2 className="mx-auto mb-3" style={{ color: theme.accent }} size={30} />
           <h1 className="text-2xl font-semibold text-slate-900">Response recorded</h1>
           <p className="mt-2 text-sm text-slate-600">
             Thank you. Your response to {form.title} has been saved.
@@ -134,22 +136,37 @@ export default function FormViewPage() {
   }
 
   return (
-    <main className="min-h-screen px-4 py-10 sm:px-6">
+    <main className={cn("grain-layer min-h-screen px-4 py-10 sm:px-6", theme.canvasClass)}>
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="blob-float absolute -left-20 top-16 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
+        <div className="blob-float-slow absolute -right-16 top-20 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
+      </div>
+
       <form onSubmit={handleSubmit} className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-        <section className="overflow-hidden rounded-3xl border border-white/50 bg-white shadow-sm">
-          <div className="p-7 sm:p-9" style={{ backgroundColor: theme.softBg }}>
-            <h1 className="text-3xl font-semibold text-slate-900 sm:text-4xl">{form.title}</h1>
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="overflow-hidden rounded-3xl border border-white/45 bg-white/85 shadow-xl backdrop-blur"
+        >
+          <div className={cn("p-7 text-white sm:p-9", theme.heroClass)}>
+            <h1 className="text-3xl font-semibold text-white sm:text-4xl">{form.title}</h1>
             {form.description && (
-              <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700 sm:text-base">
+              <p className="mt-3 whitespace-pre-wrap text-sm text-white/85 sm:text-base">
                 {form.description}
               </p>
             )}
           </div>
           <div className="h-1.5" style={{ backgroundColor: theme.accent }} />
-        </section>
+        </motion.section>
 
         {form.fields.map((field, index) => (
-          <section key={field.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <motion.section
+            key={field.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.04 }}
+            className="rounded-2xl border border-white/50 bg-white/88 p-5 shadow-md backdrop-blur sm:p-6"
+          >
             <div className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
               Item {index + 1}
             </div>
@@ -184,7 +201,7 @@ export default function FormViewPage() {
                     onChange={(event) => handleChange(field, event.target.value)}
                     required={field.required}
                     placeholder={field.placeholder || "Type your answer"}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
                   />
                 ) : (
                   <input
@@ -192,12 +209,12 @@ export default function FormViewPage() {
                     onChange={(event) => handleChange(field, event.target.value)}
                     required={field.required}
                     placeholder={field.placeholder || "Short answer"}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
                   />
                 )}
               </>
             )}
-          </section>
+          </motion.section>
         ))}
 
         {error && (

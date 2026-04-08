@@ -15,7 +15,14 @@ export function requireCreatorToken(request: Request): string | null {
 }
 
 export function normalizeTheme(themeId: string | undefined): FormThemeId {
-  if (themeId === "ocean" || themeId === "sunset" || themeId === "orchid") {
+  if (
+    themeId === "orchid" ||
+    themeId === "ocean" ||
+    themeId === "sunset" ||
+    themeId === "midnight" ||
+    themeId === "lagoon" ||
+    themeId === "dune"
+  ) {
     return themeId;
   }
   return "orchid";

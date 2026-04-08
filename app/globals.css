@@ -29,6 +29,56 @@ body {
   font-family: var(--font-sora), sans-serif;
 }
 
+.grain-layer {
+  position: relative;
+}
+
+.grain-layer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.065) 0.7px, transparent 0.7px);
+  background-size: 4px 4px;
+  mix-blend-mode: soft-light;
+  opacity: 0.6;
+}
+
+.blob-float {
+  animation: floatBlob 16s ease-in-out infinite;
+}
+
+.blob-float-slow {
+  animation: floatBlob 22s ease-in-out infinite reverse;
+}
+
+.stagger-rise {
+  animation: riseIn 0.45s ease-out both;
+}
+
+@keyframes floatBlob {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -12px, 0) scale(1.03);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes riseIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
 a,
 button {
   cursor: pointer;

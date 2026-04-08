@@ -1,4 +1,10 @@
-export type FormThemeId = "orchid" | "ocean" | "sunset";
+export type FormThemeId =
+  | "orchid"
+  | "ocean"
+  | "sunset"
+  | "midnight"
+  | "lagoon"
+  | "dune";
 
 export type FormFieldType = "short_text" | "paragraph" | "image";
 
