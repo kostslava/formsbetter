@@ -393,9 +393,14 @@ function CompactAnswerRows({
       {data.map((item) => (
         <div
           key={item.label}
-          className="grid grid-cols-[minmax(0,1fr)_minmax(96px,160px)_auto] items-center gap-2 rounded-lg border border-slate-100 bg-white/80 px-2.5 py-2"
+          className="grid grid-cols-[minmax(0,140px)_1fr_84px] items-center gap-2 rounded-lg border border-slate-100 bg-white/80 px-2.5 py-2 sm:grid-cols-[minmax(0,220px)_1fr_96px]"
         >
-          <p className="break-words text-sm font-medium leading-tight text-slate-700">{item.label}</p>
+          <p
+            title={item.label}
+            className="truncate whitespace-nowrap text-sm font-medium leading-tight text-slate-700"
+          >
+            {item.label}
+          </p>
           <div
             className="h-2.5 overflow-hidden rounded-full"
             style={{ backgroundColor: trackColor }}
@@ -410,7 +415,7 @@ function CompactAnswerRows({
               }}
             />
           </div>
-          <p className="whitespace-nowrap text-xs font-semibold text-slate-600">
+          <p className="w-full whitespace-nowrap text-right text-xs font-semibold tabular-nums text-slate-600">
             {item.count} · {formatPercent(item.percentage)}
           </p>
         </div>
