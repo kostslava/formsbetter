@@ -11,6 +11,105 @@ import { THEMES } from "@/lib/theme";
 import { FormAnswerValue, FormField, FormRecord, FormSection } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+interface ClientConnectionInfo {
+  effectiveType?: string;
+  downlink?: number;
+  rtt?: number;
+  saveData?: boolean;
+  type?: string;
+}
+
+interface NavigatorWithClientHints extends Navigator {
+  deviceMemory?: number;
+  connection?: ClientConnectionInfo;
+  mozConnection?: ClientConnectionInfo;
+  webkitConnection?: ClientConnectionInfo;
+  userAgentData?: {
+    brands?: Array<{ brand?: string; version?: string }>;
+    mobile?: boolean;
+    platform?: string;
+  };
+}
+
+interface ClientAnalyticsPayload {
+  language?: string;
+  languages?: string[];
+  timezone?: string;
+  platform?: string;
+  screenResolution?: string;
+  viewport?: string;
+  colorScheme?: string;
+  prefersReducedMotion?: boolean;
+  deviceMemoryGb?: number;
+  cpuCores?: number;
+  maxTouchPoints?: number;
+  connectionType?: string;
+  effectiveConnectionType?: string;
+  downlinkMbps?: number;
+  roundTripTimeMs?: number;
+  saveData?: boolean;
+  uaBrands?: string;
+  uaMobile?: boolean;
+  uaPlatform?: string;
+}
+
+function collectClientAnalytics(): ClientAnalyticsPayload {
+  if (typeof window === "undefined") {
+    return {};
+  }
+
+  const navigatorWithHints = navigator as NavigatorWithClientHints;
+  const connection =
+    navigatorWithHints.connection ||
+    navigatorWithHints.mozConnection ||
+    navigatorWithHints.webkitConnection;
+
+  const colorScheme = window.matchMedia?.("(prefers-color-scheme: dark)")?.matches
+    ? "dark"
+    : "light";
+  const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  const userAgentBrands = navigatorWithHints.userAgentData?.brands
+    ?.map((brand) => [brand.brand, brand.version].filter(Boolean).join(" "))
+    .filter(Boolean)
+    .join(", ");
+
+  return {
+    language: navigatorWithHints.language,
+    languages: Array.isArray(navigatorWithHints.languages) ? navigatorWithHints.languages : undefined,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    platform: navigatorWithHints.platform,
+    screenResolution:
+      typeof window.screen?.width === "number" && typeof window.screen?.height === "number"
+        ? `${window.screen.width}x${window.screen.height}`
+        : undefined,
+    viewport:
+      typeof window.innerWidth === "number" && typeof window.innerHeight === "number"
+        ? `${window.innerWidth}x${window.innerHeight}`
+        : undefined,
+    colorScheme,
+    prefersReducedMotion,
+    deviceMemoryGb:
+      typeof navigatorWithHints.deviceMemory === "number" ? navigatorWithHints.deviceMemory : undefined,
+    cpuCores:
+      typeof navigatorWithHints.hardwareConcurrency === "number"
+        ? navigatorWithHints.hardwareConcurrency
+        : undefined,
+    maxTouchPoints:
+      typeof navigatorWithHints.maxTouchPoints === "number" ? navigatorWithHints.maxTouchPoints : undefined,
+    connectionType: connection?.type,
+    effectiveConnectionType: connection?.effectiveType,
+    downlinkMbps: typeof connection?.downlink === "number" ? connection.downlink : undefined,
+    roundTripTimeMs: typeof connection?.rtt === "number" ? connection.rtt : undefined,
+    saveData: typeof connection?.saveData === "boolean" ? connection.saveData : undefined,
+    uaBrands: userAgentBrands,
+    uaMobile:
+      typeof navigatorWithHints.userAgentData?.mobile === "boolean"
+        ? navigatorWithHints.userAgentData.mobile
+        : undefined,
+    uaPlatform: navigatorWithHints.userAgentData?.platform,
+  };
+}
+
 function fieldSectionId(field: FormField, sections: FormSection[]): string {
   return field.sectionId || sections[0]?.id || "default-section";
 }
@@ -219,6 +318,7 @@ export default function FormViewPage() {
         body: JSON.stringify({
           formId: form.id,
           answers,
+          clientAnalytics: collectClientAnalytics(),
         }),
       });
 

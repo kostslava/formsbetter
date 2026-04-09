@@ -106,6 +106,7 @@ const CHART_MODE_LABELS: Record<QuestionChartMode, string> = {
 };
 
 const RESPONSE_META_KEY = "__formsbetter_meta__";
+const UNAVAILABLE = "Unavailable";
 
 interface RespondentMeta {
   ip: string;
@@ -113,18 +114,75 @@ interface RespondentMeta {
   browser: string;
   device: string;
   os: string;
+  language: string;
+  languages: string[];
+  timezone: string;
+  platform: string;
+  screenResolution: string;
+  viewport: string;
+  colorScheme: string;
+  prefersReducedMotion: string;
+  deviceMemoryGb: number | null;
+  cpuCores: number | null;
+  maxTouchPoints: number | null;
+  connectionType: string;
+  effectiveConnectionType: string;
+  downlinkMbps: number | null;
+  roundTripTimeMs: number | null;
+  saveData: string;
+  uaBrands: string;
+  uaMobile: string;
+  uaPlatform: string;
   userAgent: string;
+}
+
+function metaString(value: unknown, fallback = UNAVAILABLE): string {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+}
+
+function metaNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function metaStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
 }
 
 function parseRespondentMeta(response: FormResponseRecord): RespondentMeta {
   const rawValue = response.answers[RESPONSE_META_KEY] as FormAnswerValue | undefined;
   const fallback: RespondentMeta = {
-    ip: "Unavailable",
-    location: "Unavailable",
-    browser: "Unavailable",
-    device: "Unavailable",
-    os: "Unavailable",
-    userAgent: "Unavailable",
+    ip: UNAVAILABLE,
+    location: UNAVAILABLE,
+    browser: UNAVAILABLE,
+    device: UNAVAILABLE,
+    os: UNAVAILABLE,
+    language: UNAVAILABLE,
+    languages: [],
+    timezone: UNAVAILABLE,
+    platform: UNAVAILABLE,
+    screenResolution: UNAVAILABLE,
+    viewport: UNAVAILABLE,
+    colorScheme: UNAVAILABLE,
+    prefersReducedMotion: UNAVAILABLE,
+    deviceMemoryGb: null,
+    cpuCores: null,
+    maxTouchPoints: null,
+    connectionType: UNAVAILABLE,
+    effectiveConnectionType: UNAVAILABLE,
+    downlinkMbps: null,
+    roundTripTimeMs: null,
+    saveData: UNAVAILABLE,
+    uaBrands: UNAVAILABLE,
+    uaMobile: UNAVAILABLE,
+    uaPlatform: UNAVAILABLE,
+    userAgent: UNAVAILABLE,
   };
 
   if (typeof rawValue !== "string") {
@@ -135,28 +193,47 @@ function parseRespondentMeta(response: FormResponseRecord): RespondentMeta {
     const parsed = JSON.parse(rawValue) as Partial<RespondentMeta>;
 
     return {
-      ip: typeof parsed.ip === "string" && parsed.ip.length > 0 ? parsed.ip : fallback.ip,
-      location:
-        typeof parsed.location === "string" && parsed.location.length > 0
-          ? parsed.location
-          : fallback.location,
-      browser:
-        typeof parsed.browser === "string" && parsed.browser.length > 0
-          ? parsed.browser
-          : fallback.browser,
-      device:
-        typeof parsed.device === "string" && parsed.device.length > 0
-          ? parsed.device
-          : fallback.device,
-      os: typeof parsed.os === "string" && parsed.os.length > 0 ? parsed.os : fallback.os,
-      userAgent:
-        typeof parsed.userAgent === "string" && parsed.userAgent.length > 0
-          ? parsed.userAgent
-          : fallback.userAgent,
+      ip: metaString(parsed.ip, fallback.ip),
+      location: metaString(parsed.location, fallback.location),
+      browser: metaString(parsed.browser, fallback.browser),
+      device: metaString(parsed.device, fallback.device),
+      os: metaString(parsed.os, fallback.os),
+      language: metaString(parsed.language, fallback.language),
+      languages: metaStringArray(parsed.languages),
+      timezone: metaString(parsed.timezone, fallback.timezone),
+      platform: metaString(parsed.platform, fallback.platform),
+      screenResolution: metaString(parsed.screenResolution, fallback.screenResolution),
+      viewport: metaString(parsed.viewport, fallback.viewport),
+      colorScheme: metaString(parsed.colorScheme, fallback.colorScheme),
+      prefersReducedMotion: metaString(parsed.prefersReducedMotion, fallback.prefersReducedMotion),
+      deviceMemoryGb: metaNumber(parsed.deviceMemoryGb),
+      cpuCores: metaNumber(parsed.cpuCores),
+      maxTouchPoints: metaNumber(parsed.maxTouchPoints),
+      connectionType: metaString(parsed.connectionType, fallback.connectionType),
+      effectiveConnectionType: metaString(
+        parsed.effectiveConnectionType,
+        fallback.effectiveConnectionType
+      ),
+      downlinkMbps: metaNumber(parsed.downlinkMbps),
+      roundTripTimeMs: metaNumber(parsed.roundTripTimeMs),
+      saveData: metaString(parsed.saveData, fallback.saveData),
+      uaBrands: metaString(parsed.uaBrands, fallback.uaBrands),
+      uaMobile: metaString(parsed.uaMobile, fallback.uaMobile),
+      uaPlatform: metaString(parsed.uaPlatform, fallback.uaPlatform),
+      userAgent: metaString(parsed.userAgent, fallback.userAgent),
     };
   } catch {
     return fallback;
   }
+}
+
+function formatNullableNumber(value: number | null, suffix = ""): string {
+  if (value === null) {
+    return UNAVAILABLE;
+  }
+
+  const formatted = Number.isInteger(value) ? value.toString() : value.toFixed(1);
+  return `${formatted}${suffix}`;
 }
 
 function csvEscape(value: string): string {
@@ -821,14 +898,65 @@ export default function ResultsPage() {
 
     const header = [
       csvEscape("Submitted At"),
+      csvEscape("IP"),
+      csvEscape("Approx location"),
+      csvEscape("Device"),
+      csvEscape("Browser"),
+      csvEscape("Operating system"),
+      csvEscape("Platform"),
+      csvEscape("Language"),
+      csvEscape("Languages"),
+      csvEscape("Timezone"),
+      csvEscape("Approx RAM (GB)"),
+      csvEscape("Approx CPU cores"),
+      csvEscape("Max touch points"),
+      csvEscape("Screen resolution"),
+      csvEscape("Viewport"),
+      csvEscape("Connection type"),
+      csvEscape("Effective connection"),
+      csvEscape("Downlink (Mbps)"),
+      csvEscape("RTT (ms)"),
+      csvEscape("Data saver"),
+      csvEscape("Color scheme"),
+      csvEscape("Reduced motion"),
+      csvEscape("UA brands"),
+      csvEscape("UA platform"),
+      csvEscape("UA mobile"),
+      csvEscape("User agent"),
       ...payload.form.fields
         .filter((field) => field.type !== "image")
         .map((field) => csvEscape(field.label)),
     ].join(",");
 
     const rows = payload.responses.map((response) => {
+      const meta = parseRespondentMeta(response);
       const values = [
         csvEscape(new Date(response.created_at).toISOString()),
+        csvEscape(meta.ip),
+        csvEscape(meta.location),
+        csvEscape(meta.device),
+        csvEscape(meta.browser),
+        csvEscape(meta.os),
+        csvEscape(meta.platform),
+        csvEscape(meta.language),
+        csvEscape(meta.languages.join(" | ")),
+        csvEscape(meta.timezone),
+        csvEscape(meta.deviceMemoryGb === null ? UNAVAILABLE : String(meta.deviceMemoryGb)),
+        csvEscape(meta.cpuCores === null ? UNAVAILABLE : String(meta.cpuCores)),
+        csvEscape(meta.maxTouchPoints === null ? UNAVAILABLE : String(meta.maxTouchPoints)),
+        csvEscape(meta.screenResolution),
+        csvEscape(meta.viewport),
+        csvEscape(meta.connectionType),
+        csvEscape(meta.effectiveConnectionType),
+        csvEscape(meta.downlinkMbps === null ? UNAVAILABLE : String(meta.downlinkMbps)),
+        csvEscape(meta.roundTripTimeMs === null ? UNAVAILABLE : String(meta.roundTripTimeMs)),
+        csvEscape(meta.saveData),
+        csvEscape(meta.colorScheme),
+        csvEscape(meta.prefersReducedMotion),
+        csvEscape(meta.uaBrands),
+        csvEscape(meta.uaPlatform),
+        csvEscape(meta.uaMobile),
+        csvEscape(meta.userAgent),
         ...payload.form.fields
           .filter((field) => field.type !== "image")
           .map((field) => csvEscape(answerToText(response.answers[field.id]))),
@@ -1307,31 +1435,123 @@ export default function ResultsPage() {
 
                       <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
                         <p className="text-xs uppercase tracking-wide text-slate-500">Respondent info</p>
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
                             <p className="text-[11px] uppercase tracking-wide text-slate-500">IP</p>
-                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.ip ?? "Unavailable"}</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.ip ?? UNAVAILABLE}</p>
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
                             <p className="text-[11px] uppercase tracking-wide text-slate-500">Approx location</p>
-                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.location ?? "Unavailable"}</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.location ?? UNAVAILABLE}</p>
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
                             <p className="text-[11px] uppercase tracking-wide text-slate-500">Device</p>
-                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.device ?? "Unavailable"}</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.device ?? UNAVAILABLE}</p>
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
                             <p className="text-[11px] uppercase tracking-wide text-slate-500">Browser</p>
-                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.browser ?? "Unavailable"}</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.browser ?? UNAVAILABLE}</p>
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
                             <p className="text-[11px] uppercase tracking-wide text-slate-500">Operating system</p>
-                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.os ?? "Unavailable"}</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.os ?? UNAVAILABLE}</p>
                           </div>
-                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 sm:col-span-2">
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Platform</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.platform ?? UNAVAILABLE}</p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Language</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.language ?? UNAVAILABLE}</p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Languages</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">
+                              {activeResponseMeta && activeResponseMeta.languages.length > 0
+                                ? activeResponseMeta.languages.join(", ")
+                                : UNAVAILABLE}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Timezone</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.timezone ?? UNAVAILABLE}</p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Approx RAM</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">
+                              {formatNullableNumber(activeResponseMeta?.deviceMemoryGb ?? null, " GB")}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Approx CPU cores</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">
+                              {formatNullableNumber(activeResponseMeta?.cpuCores ?? null)}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Max touch points</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">
+                              {formatNullableNumber(activeResponseMeta?.maxTouchPoints ?? null)}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Screen resolution</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.screenResolution ?? UNAVAILABLE}</p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Viewport</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.viewport ?? UNAVAILABLE}</p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Connection type</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.connectionType ?? UNAVAILABLE}</p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Effective connection</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.effectiveConnectionType ?? UNAVAILABLE}</p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Downlink</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">
+                              {formatNullableNumber(activeResponseMeta?.downlinkMbps ?? null, " Mbps")}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">RTT</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">
+                              {formatNullableNumber(activeResponseMeta?.roundTripTimeMs ?? null, " ms")}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Data saver</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.saveData ?? UNAVAILABLE}</p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Color scheme</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.colorScheme ?? UNAVAILABLE}</p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Reduced motion</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">
+                              {activeResponseMeta?.prefersReducedMotion ?? UNAVAILABLE}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">UA brands</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.uaBrands ?? UNAVAILABLE}</p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">UA platform</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.uaPlatform ?? UNAVAILABLE}</p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">UA mobile</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.uaMobile ?? UNAVAILABLE}</p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 sm:col-span-2 xl:col-span-3">
                             <p className="text-[11px] uppercase tracking-wide text-slate-500">User agent</p>
-                            <p title={activeResponseMeta?.userAgent ?? "Unavailable"} className="mt-0.5 truncate text-sm font-medium text-slate-700">
-                              {activeResponseMeta?.userAgent ?? "Unavailable"}
+                            <p title={activeResponseMeta?.userAgent ?? UNAVAILABLE} className="mt-0.5 truncate text-sm font-medium text-slate-700">
+                              {activeResponseMeta?.userAgent ?? UNAVAILABLE}
                             </p>
                           </div>
                         </div>
