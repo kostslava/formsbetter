@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { useParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, Star } from "lucide-react";
@@ -120,6 +121,7 @@ export default function FormViewPage() {
   const lastSection = sections.length > 0 && sectionIndex === sections.length - 1;
 
   const setTextAnswer = (field: FormField, value: string) => {
+    setError(null);
     setAnswers((prev) => ({
       ...prev,
       [field.id]: value,
@@ -127,6 +129,7 @@ export default function FormViewPage() {
   };
 
   const setCheckboxAnswer = (field: FormField, option: string) => {
+    setError(null);
     setAnswers((prev) => {
       const current = Array.isArray(prev[field.id]) ? (prev[field.id] as string[]) : [];
       const exists = current.includes(option);
@@ -266,6 +269,13 @@ export default function FormViewPage() {
           <p className="mt-2 text-sm text-slate-600">
             Thank you. Your response to {form.title} has been saved.
           </p>
+          <p className="mt-4 text-sm text-slate-700">
+            Want to make your own form?{" "}
+            <Link href="/create" className="font-semibold text-slate-900 underline decoration-2 underline-offset-2 hover:text-slate-700">
+              Create one here
+            </Link>
+            .
+          </p>
         </section>
       </main>
     );
@@ -282,9 +292,6 @@ export default function FormViewPage() {
           <div className="pointer-events-none absolute -left-16 top-10 h-44 w-44 rounded-full bg-white/20 blur-3xl" />
           <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-black/15 blur-3xl" />
           <div className={cn("relative p-7 text-white sm:p-9", theme.heroClass)}>
-            <p className="inline-flex rounded-full border border-white/30 bg-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85">
-              Form
-            </p>
             <h1 className="text-3xl font-semibold text-white sm:text-4xl">{form.title}</h1>
             {form.description ? <p className="mt-3 whitespace-pre-wrap text-sm text-white/85 sm:text-base">{form.description}</p> : null}
 
@@ -405,6 +412,7 @@ export default function FormViewPage() {
                           key={`${field.id}-${value}`}
                           type="button"
                           onClick={() => {
+                            setError(null);
                             setAnswers((prev) => ({
                               ...prev,
                               [field.id]: value,
