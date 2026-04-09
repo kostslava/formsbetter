@@ -2,6 +2,7 @@ import { FormField, FormSection, FormThemeId } from "@/lib/types";
 import { verifyFirebaseIdToken } from "@/lib/firebase-server";
 
 export const SHORT_CODE_LENGTH = 7;
+export const MAX_MULTIPLE_CHOICE_OPTIONS = 8;
 
 export function jsonError(message: string, status = 400): Response {
   return Response.json({ error: message }, { status });
@@ -76,6 +77,10 @@ export function isValidFieldArray(fields: unknown): fields is FormField[] {
 
     if ((f.type === "multiple_choice" || f.type === "checkbox") && Array.isArray(f.options)) {
       if (f.options.length < 2) {
+        return false;
+      }
+
+      if (f.type === "multiple_choice" && f.options.length > MAX_MULTIPLE_CHOICE_OPTIONS) {
         return false;
       }
 

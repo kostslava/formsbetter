@@ -20,7 +20,7 @@ import {
 import { AuthPanel } from "@/components/auth-panel";
 import { firebaseAuth } from "@/lib/firebase-client";
 import { THEMES } from "@/lib/theme";
-import { FormAnswerValue, FormRecord, FormResponseRecord } from "@/lib/types";
+import { FormAnswerValue, FormField, FormRecord, FormResponseRecord } from "@/lib/types";
 import { authHeader, useAuthUser } from "@/lib/use-auth-user";
 import { cn } from "@/lib/utils";
 
@@ -30,11 +30,18 @@ interface ResultsPayload {
 }
 
 type DashboardView = "summary" | "question" | "individual";
+type QuestionChartMode = "compact" | "bar" | "pie" | "line" | "timeline";
 
 interface ChartOptionStat {
   label: string;
   count: number;
   percentage: number;
+  color: string;
+}
+
+interface LinePoint {
+  label: string;
+  value: number;
   color: string;
 }
 
@@ -85,7 +92,18 @@ const CHART_COLORS = [
   "#65a30d",
   "#4f46e5",
   "#e11d48",
+  "#0369a1",
+  "#15803d",
+  "#b45309",
 ];
+
+const CHART_MODE_LABELS: Record<QuestionChartMode, string> = {
+  compact: "Compact bars",
+  bar: "Bar graph",
+  pie: "Pie chart",
+  line: "Line graph",
+  timeline: "Timeline",
+};
 
 function csvEscape(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
@@ -139,18 +157,13 @@ function toChartOptionStats(counts: Array<{ label: string; count: number }>, den
   }));
 }
 
-function getFieldAnalytics(
-  fieldId: string,
-  fieldType: string,
-  fieldOptions: string[] | undefined,
-  maxRating: number | undefined,
-  responses: FormResponseRecord[]
-): FieldAnalytics {
+function getFieldAnalytics(field: FormField, responses: FormResponseRecord[]): FieldAnalytics {
   const totalResponses = responses.length;
+  const fieldId = field.id;
 
-  if (fieldType === "multiple_choice") {
+  if (field.type === "multiple_choice") {
     const optionCounts = new Map<string, number>();
-    for (const option of fieldOptions ?? []) {
+    for (const option of field.options ?? []) {
       optionCounts.set(option, 0);
     }
     let answered = 0;
@@ -181,9 +194,9 @@ function getFieldAnalytics(
     };
   }
 
-  if (fieldType === "checkbox") {
+  if (field.type === "checkbox") {
     const optionCounts = new Map<string, number>();
-    for (const option of fieldOptions ?? []) {
+    for (const option of field.options ?? []) {
       optionCounts.set(option, 0);
     }
 
@@ -221,8 +234,8 @@ function getFieldAnalytics(
     };
   }
 
-  if (fieldType === "rating") {
-    const ratingCap = maxRating ?? 5;
+  if (field.type === "rating") {
+    const ratingCap = field.maxRating ?? 5;
     const buckets = Array.from({ length: ratingCap }).map((_, index) => ({
       label: `${index + 1} star${index === 0 ? "" : "s"}`,
       count: 0,
@@ -264,7 +277,7 @@ function getFieldAnalytics(
     }
 
     answered += 1;
-    if (samples.length < 8) {
+    if (samples.length < 12) {
       samples.push(value.trim());
     }
   }
@@ -279,67 +292,110 @@ function getFieldAnalytics(
   };
 }
 
-function DonutChart({
-  data,
-  centerLabel,
-}: {
-  data: ChartOptionStat[];
-  centerLabel: string;
-}) {
-  const nonZero = data.filter((item) => item.count > 0);
-
-  if (nonZero.length === 0) {
-    return (
-      <div className="flex h-56 w-56 items-center justify-center rounded-full border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
-        No chart data
-      </div>
-    );
+function chartModesForAnalytics(analytics: FieldAnalytics | null): QuestionChartMode[] {
+  if (!analytics) {
+    return ["compact"];
   }
 
-  const gradientStops = nonZero
-    .reduce(
-      (acc, segment) => {
-        const sweep = (segment.percentage / 100) * 360;
-        const end = acc.angle + sweep;
+  if (analytics.kind === "multiple_choice") {
+    return ["compact", "bar", "pie", "line"];
+  }
 
-        return {
-          angle: end,
-          stops: [...acc.stops, `${segment.color} ${acc.angle}deg ${end}deg`],
-        };
-      },
-      { angle: 0, stops: [] as string[] }
-    )
-    .stops.join(", ");
+  if (analytics.kind === "checkbox") {
+    return ["compact", "bar", "line"];
+  }
 
-  return (
-    <div
-      className="relative h-56 w-56 rounded-full shadow-inner"
-      style={{ backgroundImage: `conic-gradient(${gradientStops})` }}
-    >
-      <div className="absolute inset-[22%] flex items-center justify-center rounded-full border border-white/70 bg-white/95 text-center shadow-sm">
-        <span className="px-2 text-sm font-semibold text-slate-700">{centerLabel}</span>
-      </div>
-    </div>
-  );
+  if (analytics.kind === "rating") {
+    return ["compact", "bar", "line", "pie"];
+  }
+
+  return ["timeline", "compact"];
 }
 
-function DistributionBars({
+function buildTextTimelinePoints(fieldId: string, responses: FormResponseRecord[]): LinePoint[] {
+  if (responses.length === 0) {
+    return [];
+  }
+
+  const sorted = [...responses].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+
+  let cumulative = 0;
+  const raw = sorted.map((response) => {
+    if (isAnswerFilled(response.answers[fieldId] as FormAnswerValue | undefined)) {
+      cumulative += 1;
+    }
+
+    return {
+      label: new Date(response.created_at).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      }),
+      value: cumulative,
+      color: "#0d9488",
+    };
+  });
+
+  if (raw.length <= 14) {
+    return raw;
+  }
+
+  const sampled: LinePoint[] = [];
+  const lastIndex = raw.length - 1;
+
+  for (let i = 0; i < 14; i += 1) {
+    const index = Math.round((i * lastIndex) / 13);
+    const point = raw[index];
+
+    if (!sampled.some((candidate) => candidate.label === point.label && candidate.value === point.value)) {
+      sampled.push(point);
+    }
+  }
+
+  const tail = raw[lastIndex];
+  if (sampled[sampled.length - 1] !== tail) {
+    sampled.push(tail);
+  }
+
+  return sampled;
+}
+
+function polarToCartesian(cx: number, cy: number, radius: number, angleDeg: number) {
+  const radians = (angleDeg * Math.PI) / 180;
+  return {
+    x: cx + radius * Math.cos(radians),
+    y: cy + radius * Math.sin(radians),
+  };
+}
+
+function pieSlicePath(cx: number, cy: number, radius: number, startDeg: number, endDeg: number): string {
+  const start = polarToCartesian(cx, cy, radius, startDeg);
+  const end = polarToCartesian(cx, cy, radius, endDeg);
+  const largeArc = endDeg - startDeg > 180 ? 1 : 0;
+
+  return `M ${cx} ${cy} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 1 ${end.x} ${end.y} Z`;
+}
+
+function CompactAnswerRows({
   data,
   trackColor,
 }: {
   data: ChartOptionStat[];
   trackColor: string;
 }) {
+  if (data.length === 0) {
+    return <p className="text-sm text-slate-500">No answers to chart yet.</p>;
+  }
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {data.map((item) => (
-        <div key={item.label} className="space-y-1.5">
-          <div className="flex items-center justify-between gap-2 text-xs text-slate-600">
-            <span className="truncate font-medium text-slate-700">{item.label}</span>
-            <span>
-              {item.count} ({formatPercent(item.percentage)})
-            </span>
-          </div>
+        <div
+          key={item.label}
+          className="grid grid-cols-[minmax(0,1fr)_minmax(96px,160px)_auto] items-center gap-2 rounded-lg border border-slate-100 bg-white/80 px-2.5 py-2"
+        >
+          <p className="break-words text-sm font-medium leading-tight text-slate-700">{item.label}</p>
           <div
             className="h-2.5 overflow-hidden rounded-full"
             style={{ backgroundColor: trackColor }}
@@ -354,8 +410,169 @@ function DistributionBars({
               }}
             />
           </div>
+          <p className="whitespace-nowrap text-xs font-semibold text-slate-600">
+            {item.count} · {formatPercent(item.percentage)}
+          </p>
         </div>
       ))}
+    </div>
+  );
+}
+
+function PieChart({
+  data,
+  centerLabel,
+}: {
+  data: ChartOptionStat[];
+  centerLabel: string;
+}) {
+  const nonZero = data.filter((item) => item.count > 0);
+  const total = nonZero.reduce((sum, item) => sum + item.count, 0);
+
+  if (total === 0 || nonZero.length === 0) {
+    return (
+      <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+        No chart data
+      </div>
+    );
+  }
+
+  const slices = nonZero.reduce(
+    (acc, item) => {
+      const start = (acc.running / total) * 360 - 90;
+      const nextRunning = acc.running + item.count;
+      const end = (nextRunning / total) * 360 - 90;
+
+      return {
+        running: nextRunning,
+        values: [
+          ...acc.values,
+          {
+            ...item,
+            start,
+            end,
+          },
+        ],
+      };
+    },
+    {
+      running: 0,
+      values: [] as Array<ChartOptionStat & { start: number; end: number }>,
+    }
+  ).values;
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <svg viewBox="0 0 120 120" className="h-56 w-56 drop-shadow-sm" role="img" aria-label="Pie chart">
+        {slices.length === 1 ? (
+          <circle cx="60" cy="60" r="52" fill={slices[0].color} />
+        ) : (
+          slices.map((slice) => (
+            <path
+              key={`${slice.label}-${slice.start}`}
+              d={pieSlicePath(60, 60, 52, slice.start, slice.end)}
+              fill={slice.color}
+            />
+          ))
+        )}
+        <circle cx="60" cy="60" r="27" fill="white" />
+        <text x="60" y="58" textAnchor="middle" className="fill-slate-700 text-[6px] font-bold">
+          {centerLabel}
+        </text>
+      </svg>
+    </div>
+  );
+}
+
+function VerticalBarChart({ data }: { data: ChartOptionStat[] }) {
+  if (data.length === 0) {
+    return (
+      <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+        No chart data
+      </div>
+    );
+  }
+
+  const maxValue = Math.max(...data.map((item) => item.count), 1);
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="flex min-h-52 items-end gap-2">
+        {data.map((item) => {
+          const height = (item.count / maxValue) * 180;
+
+          return (
+            <div key={item.label} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+              <span className="text-xs font-semibold text-slate-600">{item.count}</span>
+              <div className="flex h-[180px] w-full items-end rounded-md bg-slate-100/90 px-1">
+                <div
+                  className="w-full rounded-md"
+                  style={{
+                    height: `${Math.max(height, item.count > 0 ? 8 : 0)}px`,
+                    backgroundColor: item.color,
+                  }}
+                />
+              </div>
+              <span className="w-full break-words text-center text-[11px] leading-tight text-slate-600">
+                {item.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LineGraph({
+  points,
+  lineColor,
+  ariaLabel,
+}: {
+  points: LinePoint[];
+  lineColor: string;
+  ariaLabel: string;
+}) {
+  if (points.length < 2) {
+    return (
+      <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+        Not enough points for a line graph
+      </div>
+    );
+  }
+
+  const maxValue = Math.max(...points.map((point) => point.value), 1);
+  const coordinates = points.map((point, index) => {
+    const x = (index / (points.length - 1)) * 100;
+    const y = 36 - (point.value / maxValue) * 30;
+    return { ...point, x, y };
+  });
+
+  const linePath = coordinates
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+    .join(" ");
+
+  const areaPath = `${linePath} L 100 38 L 0 38 Z`;
+
+  return (
+    <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4">
+      <svg viewBox="0 0 100 40" className="h-56 w-full" role="img" aria-label={ariaLabel}>
+        <line x1="0" y1="38" x2="100" y2="38" stroke="#cbd5e1" strokeWidth="0.5" />
+        <line x1="0" y1="8" x2="100" y2="8" stroke="#e2e8f0" strokeWidth="0.5" strokeDasharray="2 2" />
+        <path d={areaPath} fill={lineColor} opacity="0.13" />
+        <path d={linePath} fill="none" stroke={lineColor} strokeWidth="1.7" strokeLinecap="round" />
+        {coordinates.map((point) => (
+          <circle key={`${point.label}-${point.x}`} cx={point.x} cy={point.y} r="1.4" fill={lineColor} />
+        ))}
+      </svg>
+
+      <div className="flex flex-wrap gap-2">
+        {coordinates.map((point) => (
+          <span key={`${point.label}-${point.value}`} className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-600">
+            {point.label}: {point.value}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -371,6 +588,7 @@ export default function ResultsPage() {
   const [view, setView] = useState<DashboardView>("summary");
   const [selectedFieldId, setSelectedFieldId] = useState<string>("");
   const [selectedResponseIndex, setSelectedResponseIndex] = useState(0);
+  const [chartMode, setChartMode] = useState<QuestionChartMode>("compact");
 
   useEffect(() => {
     if (authLoading) {
@@ -435,10 +653,7 @@ export default function ResultsPage() {
     }
 
     return new Map<string, FieldAnalytics>(
-      fields.map((field) => [
-        field.id,
-        getFieldAnalytics(field.id, field.type, field.options, field.maxRating, payload.responses),
-      ])
+      fields.map((field) => [field.id, getFieldAnalytics(field, payload.responses)])
     );
   }, [fields, payload]);
 
@@ -453,6 +668,43 @@ export default function ResultsPage() {
     }
     return analyticsByField.get(selectedField.id) ?? null;
   }, [analyticsByField, selectedField]);
+
+  const availableChartModes = useMemo(
+    () => chartModesForAnalytics(selectedFieldAnalytics),
+    [selectedFieldAnalytics]
+  );
+
+  const selectedOptionData = useMemo(() => {
+    if (!selectedFieldAnalytics) {
+      return [] as ChartOptionStat[];
+    }
+
+    if (selectedFieldAnalytics.kind === "multiple_choice" || selectedFieldAnalytics.kind === "checkbox") {
+      return selectedFieldAnalytics.options;
+    }
+
+    if (selectedFieldAnalytics.kind === "rating") {
+      return selectedFieldAnalytics.buckets;
+    }
+
+    return [] as ChartOptionStat[];
+  }, [selectedFieldAnalytics]);
+
+  const selectedLinePoints = useMemo(() => {
+    if (!selectedFieldAnalytics || !selectedField) {
+      return [] as LinePoint[];
+    }
+
+    if (selectedFieldAnalytics.kind === "text") {
+      return payload ? buildTextTimelinePoints(selectedField.id, payload.responses) : [];
+    }
+
+    return selectedOptionData.map((item) => ({
+      label: item.label,
+      value: item.count,
+      color: item.color,
+    }));
+  }, [payload, selectedField, selectedFieldAnalytics, selectedOptionData]);
 
   const answeredCells = useMemo(() => {
     if (!payload || fieldIds.length === 0) {
@@ -489,6 +741,16 @@ export default function ResultsPage() {
   useEffect(() => {
     setSelectedResponseIndex(0);
   }, [payload?.form.id]);
+
+  useEffect(() => {
+    if (availableChartModes.length === 0) {
+      return;
+    }
+
+    if (!availableChartModes.includes(chartMode)) {
+      setChartMode(availableChartModes[0]);
+    }
+  }, [availableChartModes, chartMode]);
 
   const exportCsv = () => {
     if (!payload) {
@@ -542,6 +804,14 @@ export default function ResultsPage() {
       "inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition",
       view === target
         ? "border-slate-900 bg-slate-900 text-white shadow-sm"
+        : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+    );
+
+  const modeClass = (target: QuestionChartMode) =>
+    cn(
+      "rounded-lg border px-3 py-1.5 text-xs font-semibold transition",
+      chartMode === target
+        ? "border-slate-900 bg-slate-900 text-white"
         : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
     );
 
@@ -720,10 +990,7 @@ export default function ResultsPage() {
                       <div className="mt-4">
                         {(analytics.kind === "multiple_choice" || analytics.kind === "checkbox") &&
                         analytics.options.length > 0 ? (
-                          <DistributionBars
-                            data={analytics.options.slice(0, 4)}
-                            trackColor="#e2e8f0"
-                          />
+                          <CompactAnswerRows data={analytics.options} trackColor="#e2e8f0" />
                         ) : null}
 
                         {analytics.kind === "rating" ? (
@@ -731,7 +998,7 @@ export default function ResultsPage() {
                             <p className="mb-3 text-sm text-slate-600">
                               Average rating: <span className="font-semibold text-slate-900">{analytics.averageRating.toFixed(1)} / {analytics.maxRating}</span>
                             </p>
-                            <DistributionBars data={analytics.buckets} trackColor="#e2e8f0" />
+                            <CompactAnswerRows data={analytics.buckets} trackColor="#e2e8f0" />
                           </>
                         ) : null}
 
@@ -742,7 +1009,7 @@ export default function ResultsPage() {
                             </p>
                             {analytics.samples.length > 0 ? (
                               <ul className="space-y-2 text-sm text-slate-700">
-                                {analytics.samples.slice(0, 3).map((sample, index) => (
+                                {analytics.samples.slice(0, 4).map((sample, index) => (
                                   <li key={`${field.id}-sample-${index}`} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                                     {sample}
                                   </li>
@@ -761,86 +1028,141 @@ export default function ResultsPage() {
             ) : null}
 
             {view === "question" && selectedField && selectedFieldAnalytics ? (
-              <section className="space-y-4 rounded-2xl border border-white/55 bg-white/92 p-5 shadow-lg">
-                <div className="flex flex-wrap items-end justify-between gap-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Question breakdown</p>
-                    <h2 className="mt-1 text-xl font-semibold text-slate-900">{selectedField.label}</h2>
-                  </div>
+              <section className="relative overflow-hidden rounded-2xl border border-white/55 bg-white/94 p-5 shadow-lg">
+                <div className="pointer-events-none absolute -right-12 -top-14 h-40 w-40 rounded-full bg-sky-200/30 blur-3xl" />
+                <div className="pointer-events-none absolute -left-10 bottom-0 h-28 w-28 rounded-full bg-orange-200/30 blur-3xl" />
 
-                  <label className="block text-sm font-medium text-slate-700">
-                    Question
-                    <select
-                      value={selectedField.id}
-                      onChange={(event) => setSelectedFieldId(event.target.value)}
-                      className="mt-1 block min-w-[260px] rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-slate-500"
-                    >
-                      {fields.map((field) => (
-                        <option key={field.id} value={field.id}>
-                          {field.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-
-                {(selectedFieldAnalytics.kind === "multiple_choice" ||
-                  selectedFieldAnalytics.kind === "checkbox") &&
-                selectedFieldAnalytics.options.length > 0 ? (
-                  <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-                    <div className="flex justify-center">
-                      <DonutChart
-                        data={selectedFieldAnalytics.options}
-                        centerLabel={`${selectedFieldAnalytics.answered} answers`}
-                      />
+                <div className="relative space-y-5">
+                  <div className="flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Question analytics</p>
+                      <h2 className="mt-1 text-xl font-semibold text-slate-900">{selectedField.label}</h2>
                     </div>
-                    <div className="space-y-4">
-                      {selectedFieldAnalytics.kind === "checkbox" ? (
-                        <p className="text-sm text-slate-600">
-                          Avg selections per response: {selectedFieldAnalytics.averageSelections.toFixed(1)}
-                        </p>
-                      ) : null}
-                      <DistributionBars
-                        data={selectedFieldAnalytics.options}
-                        trackColor="#dbeafe"
-                      />
-                    </div>
-                  </div>
-                ) : null}
 
-                {selectedFieldAnalytics.kind === "rating" ? (
-                  <div className="space-y-5">
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Average rating</p>
-                      <p className="mt-1 text-3xl font-semibold text-slate-900">
-                        {selectedFieldAnalytics.averageRating.toFixed(1)} / {selectedFieldAnalytics.maxRating}
-                      </p>
-                    </div>
-                    <DistributionBars data={selectedFieldAnalytics.buckets} trackColor="#e2e8f0" />
-                  </div>
-                ) : null}
-
-                {selectedFieldAnalytics.kind === "text" ? (
-                  <div className="space-y-4">
-                    <p className="text-sm text-slate-600">
-                      {selectedFieldAnalytics.answered} answered, {selectedFieldAnalytics.unanswered} blank
-                    </p>
-                    {selectedFieldAnalytics.samples.length > 0 ? (
-                      <div className="grid gap-3 md:grid-cols-2">
-                        {selectedFieldAnalytics.samples.map((sample, index) => (
-                          <div
-                            key={`${selectedField.id}-text-${index}`}
-                            className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"
-                          >
-                            {sample}
-                          </div>
+                    <label className="block text-sm font-medium text-slate-700">
+                      Question
+                      <select
+                        value={selectedField.id}
+                        onChange={(event) => setSelectedFieldId(event.target.value)}
+                        className="mt-1 block min-w-[260px] rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-slate-500"
+                      >
+                        {fields.map((field) => (
+                          <option key={field.id} value={field.id}>
+                            {field.label}
+                          </option>
                         ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                      {selectedFieldAnalytics.answered} answered
+                    </span>
+                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                      {selectedFieldAnalytics.unanswered} blank
+                    </span>
+                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                      {formatPercent(selectedFieldAnalytics.responseRate)} response rate
+                    </span>
+                    {selectedFieldAnalytics.kind === "checkbox" ? (
+                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                        Avg selections: {selectedFieldAnalytics.averageSelections.toFixed(1)}
+                      </span>
+                    ) : null}
+                    {selectedFieldAnalytics.kind === "rating" ? (
+                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                        Avg rating: {selectedFieldAnalytics.averageRating.toFixed(1)} / {selectedFieldAnalytics.maxRating}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {availableChartModes.map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setChartMode(mode)}
+                        className={modeClass(mode)}
+                      >
+                        {CHART_MODE_LABELS[mode]}
+                      </button>
+                    ))}
+                  </div>
+
+                  {selectedFieldAnalytics.kind === "text" ? (
+                    chartMode === "timeline" ? (
+                      <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+                        <LineGraph
+                          points={selectedLinePoints}
+                          lineColor="#0d9488"
+                          ariaLabel="Text response timeline"
+                        />
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                          <p className="mb-3 text-xs uppercase tracking-wide text-slate-500">Sample responses</p>
+                          {selectedFieldAnalytics.samples.length > 0 ? (
+                            <div className="space-y-2">
+                              {selectedFieldAnalytics.samples.map((sample, index) => (
+                                <p
+                                  key={`${selectedField.id}-sample-${index}`}
+                                  className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                                >
+                                  {sample}
+                                </p>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-slate-500">No written answers yet.</p>
+                          )}
+                        </div>
                       </div>
                     ) : (
-                      <p className="text-sm text-slate-500">No written answers yet.</p>
-                    )}
-                  </div>
-                ) : null}
+                      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <p className="mb-3 text-xs uppercase tracking-wide text-slate-500">Sample responses</p>
+                        {selectedFieldAnalytics.samples.length > 0 ? (
+                          <div className="grid gap-3 md:grid-cols-2">
+                            {selectedFieldAnalytics.samples.map((sample, index) => (
+                              <p
+                                key={`${selectedField.id}-compact-sample-${index}`}
+                                className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                              >
+                                {sample}
+                              </p>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-slate-500">No written answers yet.</p>
+                        )}
+                      </div>
+                    )
+                  ) : chartMode === "compact" ? (
+                    <CompactAnswerRows data={selectedOptionData} trackColor="#dbeafe" />
+                  ) : (
+                    <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+                      {chartMode === "pie" ? (
+                        <PieChart
+                          data={selectedOptionData}
+                          centerLabel={`${selectedFieldAnalytics.answered} answers`}
+                        />
+                      ) : null}
+
+                      {chartMode === "bar" ? <VerticalBarChart data={selectedOptionData} /> : null}
+
+                      {chartMode === "line" ? (
+                        <LineGraph
+                          points={selectedLinePoints}
+                          lineColor="#2563eb"
+                          ariaLabel="Answer distribution line graph"
+                        />
+                      ) : null}
+
+                      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <p className="mb-3 text-xs uppercase tracking-wide text-slate-500">Answer breakdown</p>
+                        <CompactAnswerRows data={selectedOptionData} trackColor="#e2e8f0" />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </section>
             ) : null}
 

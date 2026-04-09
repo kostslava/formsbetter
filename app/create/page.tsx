@@ -47,6 +47,8 @@ interface DraftPayload {
   fields: FormField[];
 }
 
+const MAX_MULTIPLE_CHOICE_OPTIONS = 8;
+
 function newSection(index: number): FormSection {
   return {
     id: crypto.randomUUID(),
@@ -485,6 +487,10 @@ export default function CreateFormPage() {
           return field;
         }
 
+        if (field.type === "multiple_choice" && field.options.length >= MAX_MULTIPLE_CHOICE_OPTIONS) {
+          return field;
+        }
+
         return {
           ...field,
           options: [...field.options, ""],
@@ -593,6 +599,10 @@ export default function CreateFormPage() {
         const clean = field.options.map((option) => option.trim()).filter(Boolean);
         if (clean.length < 2) {
           return "Choice-based fields need at least two options.";
+        }
+
+        if (field.type === "multiple_choice" && clean.length > MAX_MULTIPLE_CHOICE_OPTIONS) {
+          return "Multiple choice fields can have at most 8 options.";
         }
       }
 
@@ -946,10 +956,16 @@ export default function CreateFormPage() {
                           <button
                             type="button"
                             onClick={() => addChoice(field.id)}
+                            disabled={field.type === "multiple_choice" && field.options.length >= MAX_MULTIPLE_CHOICE_OPTIONS}
                             className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
                           >
                             Add option
                           </button>
+                          {field.type === "multiple_choice" ? (
+                            <p className="text-xs text-slate-500">
+                              {field.options.length}/{MAX_MULTIPLE_CHOICE_OPTIONS} options used
+                            </p>
+                          ) : null}
                         </div>
                       ) : null}
 
