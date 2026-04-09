@@ -28,6 +28,10 @@ export interface FormField {
   label: string;
   required: boolean;
   sectionId?: string;
+  sectionTitle?: string;
+  sectionDescription?: string;
+  sectionOrder?: number;
+  questionOrder?: number;
   placeholder?: string;
   imageUrl?: string;
   storagePath?: string;

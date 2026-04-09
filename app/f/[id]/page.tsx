@@ -5,23 +5,10 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import { useParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, Star } from "lucide-react";
+import { deriveSectionsFromFields, orderFieldsBySectionAndQuestion } from "@/lib/form-sections";
 import { THEMES } from "@/lib/theme";
 import { FormAnswerValue, FormField, FormRecord, FormSection } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-function deriveSections(form: FormRecord): FormSection[] {
-  if (Array.isArray(form.sections) && form.sections.length > 0) {
-    return form.sections;
-  }
-
-  const fallback: FormSection = {
-    id: "default-section",
-    title: "Section 1",
-    description: "",
-  };
-
-  return [fallback];
-}
 
 function fieldSectionId(field: FormField, sections: FormSection[]): string {
   return field.sectionId || sections[0]?.id || "default-section";
@@ -111,17 +98,24 @@ export default function FormViewPage() {
     return THEMES[form.theme_id] ?? THEMES.orchid;
   }, [form]);
 
-  const sections = useMemo(() => (form ? deriveSections(form) : []), [form]);
+  const sections = useMemo(() => (form ? deriveSectionsFromFields(form.fields || []) : []), [form]);
+
+  const orderedFields = useMemo(() => {
+    if (!form) {
+      return [];
+    }
+    return orderFieldsBySectionAndQuestion(form.fields || []);
+  }, [form]);
 
   const currentSection = sections[sectionIndex];
 
   const sectionFields = useMemo(() => {
-    if (!form || !currentSection) {
+    if (!currentSection) {
       return [];
     }
 
-    return form.fields.filter((field) => fieldSectionId(field, sections) === currentSection.id);
-  }, [currentSection, form, sections]);
+    return orderedFields.filter((field) => fieldSectionId(field, sections) === currentSection.id);
+  }, [currentSection, orderedFields, sections]);
 
   const lastSection = sections.length > 0 && sectionIndex === sections.length - 1;
 

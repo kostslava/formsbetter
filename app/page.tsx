@@ -192,12 +192,20 @@ export default function Dashboard() {
                   </p>
 
                   <div className="mt-auto flex items-center justify-between pt-5">
-                    <Link
-                      href={`/f/${form.short_code}`}
-                      className="text-sm font-semibold text-slate-700 transition hover:text-slate-900"
-                    >
-                      Open form
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/f/${form.short_code}`}
+                        className="text-sm font-semibold text-slate-700 transition hover:text-slate-900"
+                      >
+                        Open form
+                      </Link>
+                      <Link
+                        href={`/create?edit=${form.id}`}
+                        className="rounded-md border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                      >
+                        Edit
+                      </Link>
+                    </div>
                     <Link
                       href={`/r/${form.id}`}
                       className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"

@@ -1,4 +1,3 @@
-import { nanoid } from "nanoid";
 import { enrichFieldsWithSections } from "@/lib/form-sections";
 import { createSupabaseServiceClient } from "@/lib/supabase";
 import {
@@ -7,35 +6,54 @@ import {
   jsonError,
   normalizeTheme,
   requireFirebaseUserId,
-  SHORT_CODE_LENGTH,
 } from "@/lib/server-api";
 
-export async function GET(request: Request) {
+export async function GET(
+  request: Request,
+  context: RouteContext<"/api/forms/[formId]">
+) {
   const creatorUid = await requireFirebaseUserId(request);
   if (!creatorUid) {
     return jsonError("Unauthorized", 401);
   }
 
+  const { formId } = await context.params;
+
   try {
     const supabase = createSupabaseServiceClient();
 
-    const { data, error } = await supabase
+    const { data: form, error } = await supabase
       .from("forms")
-      .select("id, title, description, short_code, theme_id, created_at")
+      .select("id, title, description, short_code, theme_id, fields, created_at")
+      .eq("id", formId)
       .eq("creator_token", creatorUid)
-      .order("created_at", { ascending: false });
+      .maybeSingle();
 
     if (error) {
       return jsonError(error.message, 500);
     }
 
-    return Response.json({ forms: data ?? [] });
+    if (!form) {
+      return jsonError("Form not found", 404);
+    }
+
+    return Response.json({ form });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Server error", 500);
   }
 }
 
-export async function POST(request: Request) {
+export async function PUT(
+  request: Request,
+  context: RouteContext<"/api/forms/[formId]">
+) {
+  const creatorUid = await requireFirebaseUserId(request);
+  if (!creatorUid) {
+    return jsonError("Unauthorized", 401);
+  }
+
+  const { formId } = await context.params;
+
   let body: unknown;
 
   try {
@@ -51,11 +69,6 @@ export async function POST(request: Request) {
     fields?: unknown;
     sections?: unknown;
   };
-
-  const creatorUid = await requireFirebaseUserId(request);
-  if (!creatorUid) {
-    return jsonError("Unauthorized", 401);
-  }
 
   if (!payload.title || payload.title.trim().length < 2) {
     return jsonError("Form title is too short");
@@ -84,44 +97,28 @@ export async function POST(request: Request) {
   try {
     const supabase = createSupabaseServiceClient();
 
-    let shortCode = "";
-
-    for (let i = 0; i < 5; i += 1) {
-      const candidate = nanoid(SHORT_CODE_LENGTH);
-      const { data } = await supabase
-        .from("forms")
-        .select("id")
-        .eq("short_code", candidate)
-        .maybeSingle();
-
-      if (!data) {
-        shortCode = candidate;
-        break;
-      }
-    }
-
-    if (!shortCode) {
-      return jsonError("Could not generate short URL. Try again.", 500);
-    }
-
     const { data: form, error } = await supabase
       .from("forms")
-      .insert({
+      .update({
         title: payload.title.trim(),
         description: payload.description?.trim() ?? "",
         theme_id: themeId,
         fields: enrichedFields,
-        short_code: shortCode,
-        creator_token: creatorUid,
       })
+      .eq("id", formId)
+      .eq("creator_token", creatorUid)
       .select("id, short_code")
-      .single();
+      .maybeSingle();
 
-    if (error || !form) {
-      return jsonError(error?.message ?? "Could not save form", 500);
+    if (error) {
+      return jsonError(error.message, 500);
     }
 
-    return Response.json({ form }, { status: 201 });
+    if (!form) {
+      return jsonError("Form not found", 404);
+    }
+
+    return Response.json({ form });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Server error", 500);
   }

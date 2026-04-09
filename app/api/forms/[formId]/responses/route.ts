@@ -17,7 +17,7 @@ export async function GET(
 
     const { data: form, error: formError } = await supabase
       .from("forms")
-      .select("id, title, description, short_code, theme_id, fields, sections, created_at")
+      .select("id, title, description, short_code, theme_id, fields, created_at")
       .eq("id", formId)
       .eq("creator_token", creatorUid)
       .maybeSingle();
