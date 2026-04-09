@@ -105,6 +105,60 @@ const CHART_MODE_LABELS: Record<QuestionChartMode, string> = {
   timeline: "Timeline",
 };
 
+const RESPONSE_META_KEY = "__formsbetter_meta__";
+
+interface RespondentMeta {
+  ip: string;
+  location: string;
+  browser: string;
+  device: string;
+  os: string;
+  userAgent: string;
+}
+
+function parseRespondentMeta(response: FormResponseRecord): RespondentMeta {
+  const rawValue = response.answers[RESPONSE_META_KEY] as FormAnswerValue | undefined;
+  const fallback: RespondentMeta = {
+    ip: "Unavailable",
+    location: "Unavailable",
+    browser: "Unavailable",
+    device: "Unavailable",
+    os: "Unavailable",
+    userAgent: "Unavailable",
+  };
+
+  if (typeof rawValue !== "string") {
+    return fallback;
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue) as Partial<RespondentMeta>;
+
+    return {
+      ip: typeof parsed.ip === "string" && parsed.ip.length > 0 ? parsed.ip : fallback.ip,
+      location:
+        typeof parsed.location === "string" && parsed.location.length > 0
+          ? parsed.location
+          : fallback.location,
+      browser:
+        typeof parsed.browser === "string" && parsed.browser.length > 0
+          ? parsed.browser
+          : fallback.browser,
+      device:
+        typeof parsed.device === "string" && parsed.device.length > 0
+          ? parsed.device
+          : fallback.device,
+      os: typeof parsed.os === "string" && parsed.os.length > 0 ? parsed.os : fallback.os,
+      userAgent:
+        typeof parsed.userAgent === "string" && parsed.userAgent.length > 0
+          ? parsed.userAgent
+          : fallback.userAgent,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 function csvEscape(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
 }
@@ -518,7 +572,10 @@ function VerticalBarChart({ data }: { data: ChartOptionStat[] }) {
                   }}
                 />
               </div>
-              <span className="w-full break-words text-center text-[11px] leading-tight text-slate-600">
+              <span
+                title={item.label}
+                className="block w-full truncate whitespace-nowrap text-center text-[11px] leading-tight text-slate-600"
+              >
                 {item.label}
               </span>
             </div>
@@ -791,6 +848,10 @@ export default function ResultsPage() {
   };
 
   const activeResponse = payload?.responses[selectedResponseIndex] ?? null;
+  const activeResponseMeta = useMemo(
+    () => (activeResponse ? parseRespondentMeta(activeResponse) : null),
+    [activeResponse]
+  );
 
   const responseProgress = (response: FormResponseRecord) => {
     const answered = responseAnswerCount(response, fieldIds);
@@ -1243,6 +1304,38 @@ export default function ResultsPage() {
                           </button>
                         </div>
                       </div>
+
+                      <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <p className="text-xs uppercase tracking-wide text-slate-500">Respondent info</p>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">IP</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.ip ?? "Unavailable"}</p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Approx location</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.location ?? "Unavailable"}</p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Device</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.device ?? "Unavailable"}</p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Browser</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.browser ?? "Unavailable"}</p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Operating system</p>
+                            <p className="mt-0.5 text-sm font-medium text-slate-700">{activeResponseMeta?.os ?? "Unavailable"}</p>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 sm:col-span-2">
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">User agent</p>
+                            <p title={activeResponseMeta?.userAgent ?? "Unavailable"} className="mt-0.5 truncate text-sm font-medium text-slate-700">
+                              {activeResponseMeta?.userAgent ?? "Unavailable"}
+                            </p>
+                          </div>
+                        </div>
+                      </section>
 
                       <div className="mt-5 space-y-3">
                         {fields.map((field, index) => {
