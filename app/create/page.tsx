@@ -719,19 +719,31 @@ export default function CreateFormPage() {
             </div>
           </div>
 
-          <section className={cn("rounded-3xl border bg-white/85 p-5 shadow-lg backdrop-blur", selectedTheme.borderClass)}>
-            <div className={cn("rounded-2xl p-6 text-white", selectedTheme.heroClass)}>
+          <section className={cn("relative overflow-hidden rounded-3xl border bg-white/85 p-2 shadow-xl backdrop-blur", selectedTheme.borderClass)}>
+            <div className="pointer-events-none absolute -left-24 top-10 h-52 w-52 rounded-full bg-white/25 blur-3xl" />
+            <div className="pointer-events-none absolute -right-20 -top-20 h-60 w-60 rounded-full bg-black/15 blur-3xl" />
+            <div className={cn("relative rounded-[22px] border border-white/25 px-6 py-6 text-white sm:px-8", selectedTheme.heroClass)}>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <p className="rounded-full border border-white/30 bg-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85">
+                  Form header
+                </p>
+                <p className="text-xs font-medium text-white/80">{sections.length} sections</p>
+              </div>
+
               <input
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
                 placeholder="Untitled form"
-                className="w-full bg-transparent text-3xl font-semibold tracking-tight text-white outline-none placeholder:text-white/70"
+                className="w-full bg-transparent text-3xl font-semibold tracking-tight text-white outline-none placeholder:text-white/70 sm:text-4xl"
               />
+
+              <div className="mt-4 h-px w-full bg-white/25" />
+
               <textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
                 placeholder="Form description (optional)"
-                className="mt-3 min-h-20 w-full resize-y bg-transparent text-sm text-white/90 outline-none placeholder:text-white/70"
+                className="mt-4 min-h-20 w-full resize-y bg-transparent text-sm text-white/90 outline-none placeholder:text-white/70"
               />
             </div>
           </section>
@@ -847,6 +859,22 @@ export default function CreateFormPage() {
                           placeholder="Question title"
                           className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800"
                         />
+                        <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+                          {uploadingFieldId === field.id ? (
+                            <LoaderCircle size={14} className="animate-spin" />
+                          ) : (
+                            <ImageIcon size={14} />
+                          )}
+                          {field.imageUrl ? "Replace image" : "Add image"}
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp,image/gif"
+                            className="hidden"
+                            onChange={(event) => {
+                              void handleImageUpload(field.id, event);
+                            }}
+                          />
+                        </label>
                         <button
                           type="button"
                           onClick={() => duplicateField(field.id)}
@@ -863,6 +891,28 @@ export default function CreateFormPage() {
                           <Trash2 size={14} />
                         </button>
                       </div>
+
+                      {field.imageUrl ? (
+                        <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                          <Image
+                            src={field.imageUrl}
+                            alt={field.label || "Question image"}
+                            width={1200}
+                            height={720}
+                            className="max-h-72 w-full object-cover"
+                          />
+                          <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                            <span>{field.type === "image" ? "Standalone image block" : "Image attached to this question"}</span>
+                            <button
+                              type="button"
+                              onClick={() => updateField(field.id, { imageUrl: "", storagePath: undefined })}
+                              className="rounded-md border border-slate-200 bg-white px-2 py-1 font-semibold text-slate-600 hover:bg-rose-50 hover:text-rose-700"
+                            >
+                              Remove image
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
 
                       {field.type === "short_text" || field.type === "paragraph" ? (
                         <input
@@ -957,37 +1007,6 @@ export default function CreateFormPage() {
                         </div>
                       ) : null}
 
-                      {field.type === "image" ? (
-                        <div className="mt-3">
-                          {field.imageUrl ? (
-                            <Image
-                              src={field.imageUrl}
-                              alt={field.label || "Uploaded image"}
-                              width={1000}
-                              height={500}
-                              className="max-h-72 w-full rounded-lg object-cover"
-                            />
-                          ) : (
-                            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
-                              {uploadingFieldId === field.id ? (
-                                <LoaderCircle size={15} className="animate-spin" />
-                              ) : (
-                                <ImageIcon size={15} />
-                              )}
-                              Upload image
-                              <input
-                                type="file"
-                                accept="image/png,image/jpeg,image/webp,image/gif"
-                                className="hidden"
-                                onChange={(event) => {
-                                  void handleImageUpload(field.id, event);
-                                }}
-                              />
-                            </label>
-                          )}
-                        </div>
-                      ) : null}
-
                       {field.type !== "image" ? (
                         <label className="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-slate-600">
                           <input
@@ -1023,7 +1042,6 @@ export default function CreateFormPage() {
               <button type="button" onClick={() => addField("multiple_choice")} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700"><ListChecks size={16} />Single choice</button>
               <button type="button" onClick={() => addField("checkbox")} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700"><CheckSquare size={16} />Multi choice</button>
               <button type="button" onClick={() => addField("rating")} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700"><Gauge size={16} />Rating</button>
-              <button type="button" onClick={() => addField("image")} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700"><ImageIcon size={16} />Image</button>
             </div>
           </section>
 

@@ -277,9 +277,14 @@ export default function FormViewPage() {
         <motion.section
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="overflow-hidden rounded-3xl border border-white/45 bg-white/85 shadow-xl backdrop-blur"
+          className="relative overflow-hidden rounded-3xl border border-white/45 bg-white/85 shadow-xl backdrop-blur"
         >
-          <div className={cn("p-7 text-white sm:p-9", theme.heroClass)}>
+          <div className="pointer-events-none absolute -left-16 top-10 h-44 w-44 rounded-full bg-white/20 blur-3xl" />
+          <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-black/15 blur-3xl" />
+          <div className={cn("relative p-7 text-white sm:p-9", theme.heroClass)}>
+            <p className="inline-flex rounded-full border border-white/30 bg-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85">
+              Form
+            </p>
             <h1 className="text-3xl font-semibold text-white sm:text-4xl">{form.title}</h1>
             {form.description ? <p className="mt-3 whitespace-pre-wrap text-sm text-white/85 sm:text-base">{form.description}</p> : null}
 
@@ -320,6 +325,12 @@ export default function FormViewPage() {
                   {field.label}
                   {field.required ? <span className="ml-1 text-rose-600">*</span> : null}
                 </label>
+
+                {field.imageUrl ? (
+                  <figure className="mb-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                    <Image src={field.imageUrl} alt={field.label || "Question image"} width={1280} height={720} className="max-h-[360px] w-full object-cover" />
+                  </figure>
+                ) : null}
 
                 {field.type === "paragraph" ? (
                   <textarea
