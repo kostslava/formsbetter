@@ -896,74 +896,28 @@ export default function ResultsPage() {
       return;
     }
 
+    const exportFields = payload.form.fields.filter((field) => field.type !== "image");
+
     const header = [
-      csvEscape("Submitted At"),
-      csvEscape("IP"),
-      csvEscape("Approx location"),
-      csvEscape("Device"),
-      csvEscape("Browser"),
-      csvEscape("Operating system"),
-      csvEscape("Platform"),
-      csvEscape("Language"),
-      csvEscape("Languages"),
-      csvEscape("Timezone"),
-      csvEscape("Approx RAM (GB)"),
-      csvEscape("Approx CPU cores"),
-      csvEscape("Max touch points"),
-      csvEscape("Screen resolution"),
-      csvEscape("Viewport"),
-      csvEscape("Connection type"),
-      csvEscape("Effective connection"),
-      csvEscape("Downlink (Mbps)"),
-      csvEscape("RTT (ms)"),
-      csvEscape("Data saver"),
-      csvEscape("Color scheme"),
-      csvEscape("Reduced motion"),
-      csvEscape("UA brands"),
-      csvEscape("UA platform"),
-      csvEscape("UA mobile"),
-      csvEscape("User agent"),
-      ...payload.form.fields
-        .filter((field) => field.type !== "image")
-        .map((field) => csvEscape(field.label)),
+      csvEscape("Timestamp"),
+      ...exportFields.map((field) => csvEscape(field.label)),
     ].join(",");
 
-    const rows = payload.responses.map((response) => {
-      const meta = parseRespondentMeta(response);
+    const rows = [...payload.responses]
+      .sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      )
+      .map((response) => {
       const values = [
-        csvEscape(new Date(response.created_at).toISOString()),
-        csvEscape(meta.ip),
-        csvEscape(meta.location),
-        csvEscape(meta.device),
-        csvEscape(meta.browser),
-        csvEscape(meta.os),
-        csvEscape(meta.platform),
-        csvEscape(meta.language),
-        csvEscape(meta.languages.join(" | ")),
-        csvEscape(meta.timezone),
-        csvEscape(meta.deviceMemoryGb === null ? UNAVAILABLE : String(meta.deviceMemoryGb)),
-        csvEscape(meta.cpuCores === null ? UNAVAILABLE : String(meta.cpuCores)),
-        csvEscape(meta.maxTouchPoints === null ? UNAVAILABLE : String(meta.maxTouchPoints)),
-        csvEscape(meta.screenResolution),
-        csvEscape(meta.viewport),
-        csvEscape(meta.connectionType),
-        csvEscape(meta.effectiveConnectionType),
-        csvEscape(meta.downlinkMbps === null ? UNAVAILABLE : String(meta.downlinkMbps)),
-        csvEscape(meta.roundTripTimeMs === null ? UNAVAILABLE : String(meta.roundTripTimeMs)),
-        csvEscape(meta.saveData),
-        csvEscape(meta.colorScheme),
-        csvEscape(meta.prefersReducedMotion),
-        csvEscape(meta.uaBrands),
-        csvEscape(meta.uaPlatform),
-        csvEscape(meta.uaMobile),
-        csvEscape(meta.userAgent),
-        ...payload.form.fields
-          .filter((field) => field.type !== "image")
-          .map((field) => csvEscape(answerToText(response.answers[field.id]))),
+        csvEscape(new Date(response.created_at).toLocaleString()),
+        ...exportFields.map((field) =>
+          csvEscape(answerToText(response.answers[field.id]))
+        ),
       ];
 
       return values.join(",");
-    });
+      });
 
     const csv = [header, ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
